@@ -1,0 +1,8 @@
+---
+/** Pencilled note on sample content (sample: true). Shown only while SHOW_SAMPLES is on. */
+interface Props {
+  text?: string;
+}
+const { text = 'sample entry, replace me' } = Astro.props;
+---
+<span class="sample-note" role="note"><span class="sn-arrow" aria-hidden="true">↖</span>{text}</span>

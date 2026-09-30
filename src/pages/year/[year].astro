@@ -1,0 +1,131 @@
+---
+/**
+ * /year/YYYY: a printed annual report. The figures come from the collections and the
+ * timeline at build time; LeetCode solved (all-time) and the GitHub repos opened that year
+ * are fetched live.
+ */
+import Base from '../../layouts/Base.astro';
+import { GITHUB_USERNAME, SITE, isSet } from '../../config';
+import { availableYears, yearReport } from '../../lib/year';
+import { formatDate } from '../../lib/timeline';
+import { barChart, SERIES } from '../../lib/charts';
+import { url } from '../../lib/url';
+import { splitHoursText } from '../../lib/daily-parts';
+import { todayIn } from '../../lib/tracker';
+import { TIMEZONE } from '../../config';
+
+export async function getStaticPaths() {
+  // The current year always gets a page (the home page links to it), even before it has data.
+  const current = Number(todayIn(TIMEZONE).slice(0, 4));
+  const years = await availableYears();
+  const list = years.includes(current) ? years : [current, ...years];
+  return list.map((y) => ({ params: { year: String(y) }, props: { year: y, years: list } }));
+}
+interface Props {
+  year: number;
+  years: number[];
+}
+const { year, years } = Astro.props;
+const r = await yearReport(year);
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const hasMonths = r.months.some((m) => m.entries || m.posts || m.tils);
+const monthsChart = hasMonths
+  ? barChart({
+      title: `Entries, posts and notes per month, ${year}`,
+      series: [
+        { label: 'Log entries', color: SERIES(0) },
+        { label: 'Posts', color: SERIES(1) },
+        { label: 'TILs', color: SERIES(2) },
+      ],
+      data: r.months.map((m, i) => ({ label: MON[i], values: [m.entries, m.posts, m.tils] })),
+      height: 200,
+    })
+  : '<p class="muted empty-chart">Nothing dated in this year yet.</p>';
+const gh = isSet(GITHUB_USERNAME) ? GITHUB_USERNAME : '';
+const printed = new Date().toISOString().slice(0, 10);
+---
+<Base title={`${year} in review`} description={`${SITE.name}'s ${year} as an annual report: hours, entries, books, posts and highlights.`} active="practice" paper="plain" section="Annual report">
+  <article class="annual" id="annual-root" data-year={year} data-gh={gh}>
+    <header class="annual-cover">
+      <div>
+        <p class="kicker" style="margin:0">Annual report · {SITE.name}</p>
+        <h1>The year<br />in review</h1>
+      </div>
+      <span class="yr" aria-hidden="true">{year}</span>
+    </header>
+
+    {years.length > 1 && (
+      <nav class="year-nav" aria-label="Other years">
+        {years.map((y) => <a href={url(`/year/${y}/`)} aria-current={y === year ? 'page' : undefined}>{y}</a>)}
+      </nav>
+    )}
+
+    <dl class="figures">
+      <div class="figure"><dt>hours practised{splitHoursText(r.workHours, r.selfHours) && <span class="fig-split">{splitHoursText(r.workHours, r.selfHours)}</span>}</dt><dd>{r.hours}</dd></div>
+      <div class="figure"><dt>log entries</dt><dd>{r.entries}</dd></div>
+      <div class="figure"><dt>active days</dt><dd>{r.activeDays}</dd></div>
+      <div class="figure"><dt>longest streak</dt><dd>{r.longestStreak}d</dd></div>
+      <div class="figure"><dt>books finished</dt><dd>{r.books}</dd></div>
+      <div class="figure"><dt>other reading</dt><dd>{r.finishedOther}</dd></div>
+      <div class="figure"><dt>posts written</dt><dd>{r.posts}</dd></div>
+      <div class="figure"><dt>TIL notes</dt><dd>{r.tils}</dd></div>
+      {gh && <div class="figure"><dt>repos opened</dt><dd id="yr-repos">…</dd></div>}
+    </dl>
+
+    <section aria-labelledby="mo-h" style="margin-bottom:2.4rem">
+      <h2 id="mo-h">Month by month</h2>
+      <div class="chart-card" set:html={monthsChart} />
+    </section>
+
+    <div class="annual-cols">
+      <section aria-labelledby="hl-h">
+        <h2 id="hl-h">Highlights</h2>
+        {r.highlights.length ? (
+          <ol class="highlights">
+            {r.highlights.map((e) => (
+              <li>
+                <time>{formatDate(e.start)}</time>
+                <div><strong>{e.title}</strong>{e.org && <span>{e.org}</span>}</div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p class="muted">No milestones on the <a href={url('/journey/')}>trail</a> for {year}.</p>
+        )}
+      </section>
+      <div>
+        <section aria-labelledby="tp-h">
+          <h2 id="tp-h">Most-practised topics</h2>
+          {r.topTopics.length ? (
+            <ol class="new-skills" style="display:grid;gap:.3rem">
+              {r.topTopics.map(([t, n]) => <li><span class="hl-tag">{t}</span> <span class="muted">× {n}</span></li>)}
+            </ol>
+          ) : (
+            <p class="muted">No logged topics.</p>
+          )}
+        </section>
+        <section aria-labelledby="ns-h" style="margin-top:2rem">
+          <h2 id="ns-h">New skills picked up</h2>
+          {r.newSkills.length ? <ul class="new-skills">{r.newSkills.map((s) => <li>{s}</li>)}</ul> : <p class="muted">None first recorded this year.</p>}
+        </section>
+      </div>
+    </div>
+
+    <p class="annual-foot">
+      Printed {printed} from the notebook's own records · <a href={url('/practice/tracker/')}>tracker</a> · <a href={url('/practice/efforts/')}>efforts ledger</a>
+    </p>
+  </article>
+</Base>
+
+<script>
+  import { onPage } from '../../scripts/lifecycle';
+  import { getGitHubData, publicRepos } from '../../lib/profiles-client';
+
+  onPage('annual-root', async (root) => {
+    const el = root.querySelector('#yr-repos');
+    const gh = root.dataset.gh;
+    if (!el || !gh) return;
+    const { data } = await getGitHubData(gh);
+    el.textContent = data ? String(publicRepos(data).filter((r) => !r.fork && r.created_at.startsWith(root.dataset.year!)).length) : '—';
+  });
+</script>

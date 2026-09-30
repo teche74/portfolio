@@ -1,0 +1,40 @@
+---
+/** Page 88: this month's planner page, torn out of a spiral pad, with an "updated" stamp. */
+import { render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import SampleNote from '../components/SampleNote.astro';
+import EmptyState from '../components/EmptyState.astro';
+import { getNow } from '../lib/content';
+import { formatDay } from '../lib/daily';
+
+const now = await getNow();
+const Content = now ? (await render(now)).Content : null;
+const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const upd = now?.data.updated;
+---
+<Base title="Now" description="What I'm focused on this month: work, practice and reading." active="now" paper="kraft">
+  <PageHead no={88} kicker="Now · this month" title="The planner" lede="What I'm working on, practising and reading this month, with the done bits ticked." />
+  {now && Content ? (
+    <article class="planner torn" aria-labelledby="now-title" data-reveal>
+      <header class="planner-head">
+        <h2 id="now-title" class="page-title" style="font-size:clamp(1.6rem,1.2rem + 1.4vw,2.2rem)">{now.data.title}</h2>
+        <span class="planner-meta">
+          updated <time datetime={now.data.updated}>{formatDay(now.data.updated)}</time>{now.data.location && ` · ${now.data.location}`}
+        </span>
+      </header>
+      {upd && (
+        <span class="stamp green" style="--rot:9deg" aria-hidden="true">
+          <span>updated</span><strong>{Number(upd.slice(8, 10))} {MON[Number(upd.slice(5, 7)) - 1]}</strong><span>{upd.slice(0, 4)}</span>
+        </span>
+      )}
+      <div class="prose"><Content /></div>
+      {now.data.sample && <p style="padding-left:2.2rem"><SampleNote /></p>}
+    </article>
+  ) : (
+    <EmptyState title="Planner page not filled in yet">This month's page is still blank. Write <code>src/content/now.md</code> or use the Now tab in /admin.</EmptyState>
+  )}
+  <p class="muted small" style="text-align:center;margin-top:2rem">
+    A <a href="https://nownownow.com/about" target="_blank" rel="noopener noreferrer">/now page<span class="sr-only"> (opens in new tab)</span></a>: what this person is focused on at this point in their life.
+  </p>
+</Base>

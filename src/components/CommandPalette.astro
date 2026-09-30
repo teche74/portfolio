@@ -1,0 +1,139 @@
+---
+/**
+ * Command palette markup + its build-time search index. Behaviour: src/scripts/palette.ts.
+ * Live GitHub repos are appended in the browser on first open.
+ */
+import Icon from './Icon.astro';
+import { FEATURED_REPOS, GITHUB_USERNAME, LINKS, SITE, SOCIALS, isSet } from '../config';
+import { PROFILES } from '../data/profiles';
+import { REPO_PITCHES } from '../data/projects';
+import { getDailyEntries, formatDay, partsOf } from '../lib/daily';
+import { getTimeline } from '../lib/timeline-data';
+import { TYPE_META, formatRange, sortEntries } from '../lib/timeline';
+import { url } from '../lib/url';
+import { NAV } from '../lib/nav';
+import { getPosts, getReading, getTils } from '../lib/content';
+import { STATUS_LABEL } from '../lib/reading-meta';
+import { availableYears } from '../lib/year';
+import type { PaletteItem } from '../scripts/palette';
+
+const gh = isSet(GITHUB_USERNAME) ? GITHUB_USERNAME : '';
+const items: PaletteItem[] = [];
+const add = (i: PaletteItem) => items.push(i);
+const [posts, reading, tils, years] = await Promise.all([getPosts(), getReading(), getTils(), availableYears()]);
+
+// Actions
+add({ id: 'act-theme', title: 'Pull the desk lamp (dark / light)', group: 'Actions', action: 'theme', icon: 'moon', keywords: 'dark mode light mode appearance' });
+if (isSet(SITE.resume) && SITE.resume) {
+  add({ id: 'act-resume-dl', title: 'Download resume (PDF)', group: 'Actions', href: url(SITE.resume), download: true, icon: 'download', keywords: 'cv pdf' });
+  add({ id: 'act-resume-view', title: 'View resume', group: 'Actions', href: url('/resume/'), icon: 'file', keywords: 'cv pdf' });
+}
+if (isSet(SITE.email)) add({ id: 'act-copy-email', title: 'Copy email address', group: 'Actions', action: 'copy-email', icon: 'copy', keywords: 'contact mail' });
+for (const s of SOCIALS.filter((s) => isSet(s.href) && s.icon !== 'mail')) {
+  add({ id: `act-open-${s.icon}`, title: `Open ${s.label}`, group: 'Actions', href: s.href, external: true, icon: s.icon, keywords: 'profile social' });
+}
+
+// Pages (one per notebook section, plus the practice sub-pages)
+for (const n of NAV.filter((n) => n.id !== 'resume' || (isSet(SITE.resume) && SITE.resume))) {
+  add({ id: `pg-${n.id}`, title: n.label, group: 'Pages', hint: n.blurb, href: url(n.href), icon: 'arrow', keywords: n.blurb });
+}
+add({ id: 'pg-tracker', title: 'Practice tracker & learning analytics', group: 'Pages', href: url('/practice/tracker/'), icon: 'clock', keywords: 'heatmap streak hours topics' });
+add({ id: 'pg-efforts', title: 'Efforts ledger', group: 'Pages', href: url('/practice/efforts/'), icon: 'chart', keywords: 'leetcode hours books posts til totals' });
+for (const y of years) add({ id: `pg-year-${y}`, title: `Year in review ${y}`, group: 'Pages', href: url(`/year/${y}/`), icon: 'file', keywords: 'annual report totals' });
+
+// Blog, reading, TIL
+for (const p of posts)
+  add({ id: `bl-${p.id}`, title: p.data.title, group: 'Blog', hint: formatDay(p.data.date), href: url(`/blog/${p.id}/`), icon: 'file', keywords: `${p.data.summary} ${p.data.tags.join(' ')}` });
+for (const r of reading)
+  add({
+    id: `rd-${r.id}`,
+    title: r.data.title,
+    group: 'Reading',
+    hint: `${r.data.author} · ${STATUS_LABEL[r.data.status]}`,
+    href: url(`/reading/#${r.id}`),
+    icon: 'book',
+    keywords: `${r.data.type} ${r.data.tags.join(' ')}`,
+  });
+for (const t of tils) add({ id: `til-${t.id}`, title: t.data.title, group: 'TIL', hint: formatDay(t.data.date), href: url(`/til/${t.id}/`), icon: 'spark', keywords: t.data.tags.join(' ') });
+
+// Featured projects
+const pitchFor = (name: string) => Object.entries(REPO_PITCHES).find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1];
+if (gh) {
+  for (const name of FEATURED_REPOS) {
+    const p = pitchFor(name);
+    add({
+      id: `prj-${name}`,
+      title: p?.title ?? name,
+      group: 'Projects',
+      hint: p?.kind ?? (p?.tags ?? []).slice(0, 2).join(' · '),
+      href: `https://github.com/${gh}/${name}`,
+      external: true,
+      icon: 'github',
+      keywords: `${name} ${p?.pitch ?? ''} ${(p?.tags ?? []).join(' ')}`,
+    });
+  }
+}
+
+// Journey
+for (const e of sortEntries(getTimeline())) {
+  const target = e.credential || e.link;
+  add({
+    id: `tl-${e.id}`,
+    title: e.title,
+    group: 'Journey',
+    hint: `${TYPE_META[e.type].label} · ${formatRange(e)}`,
+    href: target && /^https?:/.test(target) ? target : url('/journey/'),
+    external: !!(target && /^https?:/.test(target)),
+    icon: e.type === 'award' ? 'trophy' : 'spark',
+    keywords: `${e.org ?? ''} ${(e.tags ?? []).join(' ')} ${e.description ?? ''}`,
+  });
+}
+
+// Practice log
+for (const d of await getDailyEntries()) {
+  add({
+    id: `dl-${d.id}`,
+    title: d.data.title,
+    group: 'Practice log',
+    hint: formatDay(d.data.date),
+    href: url(`/practice/${d.id}/`),
+    icon: 'book',
+    keywords: `${d.data.date} ${[...partsOf(d).tags, ...partsOf(d).topics].join(' ')}`,
+  });
+}
+
+// Profiles & links
+for (const p of PROFILES.filter((p) => isSet(p.href) && !['github', 'leetcode'].includes(p.id))) {
+  add({ id: `pf-${p.id}`, title: p.name, group: 'Profiles & links', hint: p.handle, href: p.href, external: true, icon: 'globe' });
+}
+for (const l of LINKS.filter((l) => isSet(l.href))) {
+  add({ id: `ln-${l.label}`, title: l.label, group: 'Profiles & links', hint: l.note, href: l.href, external: true, icon: l.icon });
+}
+const json = JSON.stringify(items).replace(/</g, '\\u003c');
+---
+<dialog id="cmdk" class="palette catalogue" aria-labelledby="cmdk-title" data-github={gh}>
+  <div class="drawer-front" aria-hidden="true"><span class="drawer-label">A – Z · everything in the notebook</span><span class="drawer-pull"></span></div>
+  <div class="cmdk-head">
+    <h2 id="cmdk-title" class="sr-only">Card catalogue search</h2>
+    <Icon name="search" class="cmdk-search-ico" />
+    <input
+      id="cmdk-input"
+      type="text"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-controls="cmdk-list"
+      aria-describedby="cmdk-help"
+      placeholder="Look up a page, book, project, date…"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button type="button" id="cmdk-close" class="icon-btn" aria-label="Close the card catalogue"><Icon name="close" /></button>
+  </div>
+  <ul id="cmdk-list" role="listbox" aria-label="Catalogue cards"></ul>
+  <div class="cmdk-foot" id="cmdk-help">
+    <span><kbd>↑</kbd><kbd>↓</kbd> flip cards</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span>
+    <span class="sr-only" id="cmdk-status" role="status" aria-live="polite"></span>
+  </div>
+</dialog>
+<script type="application/json" id="palette-index" set:html={json} />

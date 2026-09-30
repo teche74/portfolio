@@ -1,0 +1,15 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import Timeline from '../components/Timeline.astro';
+import { SITE } from '../config';
+---
+<Base title="Journey" description={`${SITE.name}'s journey: education, work, awards, certifications, hackathons and GitHub projects on one trail.`} active="journey" paper="topo">
+  <PageHead
+    no={7}
+    kicker="Journey · trail map"
+    title="The trail so far"
+    lede="From the trailhead to “you are here”: polaroids for school and work, medals for awards, certificates, flags for hackathons, and a camp for every quarter of GitHub repos."
+  />
+  <Timeline />
+</Base>

@@ -1,0 +1,725 @@
+---
+/**
+ * Owner-only editor. Not linked from the nav, noindex. It is a public static page, so it
+ * holds no secrets: every write needs the owner's GitHub token, which lives only in the
+ * owner's browser (localStorage) and is sent only to api.github.com.
+ *
+ * Tabs: Daily, Blog, Reading, TIL and Now are Markdown documents driven by the specs in
+ * src/lib/admin-docs.ts; Timeline edits src/data/timeline.json. Without a token every tab
+ * still works and offers a download instead of a commit.
+ */
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import { REPO, TIMEZONE } from '../config';
+import { ENTRY_TYPES, TYPE_META } from '../lib/timeline';
+import { docSpecs } from '../lib/admin-docs';
+import rawTimeline from '../data/timeline.json';
+
+const specs = docSpecs(REPO);
+const cfg = { repo: REPO, tz: TIMEZONE };
+const tabs = [...specs.map((s) => ({ id: s.kind, label: s.label })), { id: 'timeline', label: 'Timeline' }];
+---
+<Base title="Admin" description="Owner-only editor." noindex transitions={false} paper="plain" section="Editor">
+  <div id="admin" data-cfg={JSON.stringify(cfg)}>
+    <PageHead kicker="Owner only · writes go to GitHub" title="Site editor" id="admin-title">
+      <p class="muted" style="max-width:62ch">
+        Changes are committed to <code>{REPO.owner}/{REPO.name}</code> on <code>{REPO.branch}</code>, and GitHub Actions rebuilds the
+        site in about a minute. No token? Every tab can download the file so you can commit it yourself.
+      </p>
+    </PageHead>
+
+    <section class="index-card" aria-labelledby="conn-title" style="max-width:64rem">
+      <h2 id="conn-title" style="font-size:1.15rem">Connect to GitHub</h2>
+      <form id="token-form" class="form-grid" autocomplete="off">
+        <label class="wide">
+          Fine-grained personal access token · needs only "Contents: Read and write" on {REPO.owner}/{REPO.name}; stored in this browser's localStorage and nowhere else
+          <input type="password" id="token" placeholder="github_pat_…" spellcheck="false" autocomplete="off" />
+        </label>
+      </form>
+      <div class="btn-row">
+        <button class="btn primary" type="submit" form="token-form">Save &amp; verify</button>
+        <button class="btn" type="button" id="token-forget">Forget token</button>
+        <a class="btn ghost" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Create a token ↗<span class="sr-only"> (opens in new tab)</span></a>
+      </div>
+      <p class="admin-status" id="conn-status" role="status">Not connected. You can still edit and download files.</p>
+    </section>
+
+    <div class="admin-tabs" role="tablist" aria-label="What to edit">
+      {tabs.map((t, i) => (
+        <button type="button" role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} data-tab={t.id}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+
+    {specs.map((s, i) => (
+      <section class="admin-panel" role="tabpanel" id={`panel-${s.kind}`} aria-labelledby={`tab-${s.kind}`} data-kind={s.kind} hidden={i !== 0}>
+        <p class="muted">{s.intro}</p>
+
+        <details class="admin-files">
+          <summary>Files on GitHub <span class="muted small">({s.dir ?? s.fixedPath})</span></summary>
+          <div class="btn-row">
+            <button class="btn small" type="button" data-act="list" disabled>{s.dir ? 'List files' : 'Load current file'}</button>
+          </div>
+          <ul class="admin-list" data-list></ul>
+        </details>
+
+        <form class="form-grid" data-form novalidate>
+          {s.fields.map((f) => {
+            const id = `${s.kind}-${f.key}`;
+            if (f.type === 'check')
+              return (
+                <label class="check-row">
+                  <span><input type="checkbox" id={id} name={f.key} /> {f.label}</span>
+                  {f.hint && <small>{f.hint}</small>}
+                </label>
+              );
+            return (
+              <label class={f.wide ? 'wide' : undefined}>
+                <span>{f.label}{f.required && <span aria-hidden="true"> *</span>}{f.hint && <span class="muted"> · {f.hint}</span>}</span>
+                {f.type === 'select' ? (
+                  <select id={id} name={f.key}>{f.options!.map((o) => <option value={o.value}>{o.label}</option>)}</select>
+                ) : (
+                  <input
+                    id={id}
+                    name={f.key}
+                    type={f.type === 'tags' ? 'text' : f.type}
+                    required={f.required}
+                    min={f.min}
+                    max={f.max}
+                    step={f.step}
+                    placeholder={f.placeholder}
+                    inputmode={f.type === 'number' ? 'decimal' : undefined}
+                  />
+                )}
+              </label>
+            );
+          })}
+        </form>
+
+        {s.parts ? (
+          s.parts.map((p) => (
+            <fieldset class={`admin-part part-${p.key}`} data-part={p.key}>
+              <legend>{p.label}</legend>
+              {p.hint && <p class="pencil-note">{p.hint}</p>}
+              <div class="form-grid">
+                {p.fields.map((f) => (
+                  <label class={f.wide ? 'wide' : undefined}>
+                    <span>{f.label}{f.hint && <span class="muted"> · {f.hint}</span>}</span>
+                    <input
+                      id={`${s.kind}-${p.key}-${f.key}`}
+                      name={`${p.key}.${f.key}`}
+                      type={f.type === 'number' ? 'number' : 'text'}
+                      min={f.min}
+                      max={f.max}
+                      step={f.step}
+                      placeholder={f.placeholder}
+                      inputmode={f.type === 'number' ? 'decimal' : undefined}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div class="editor-split">
+                <label class="md-label">
+                  <span>{p.label} notes (Markdown)</span>
+                  <textarea id={`${s.kind}-${p.key}-body`} data-part-body={p.key} spellcheck="true"></textarea>
+                </label>
+                <div>
+                  <span class="md-label"><span>Preview</span></span>
+                  <div class="md-preview prose" data-part-preview={p.key} aria-live="polite"></div>
+                </div>
+              </div>
+            </fieldset>
+          ))
+        ) : (
+          <div class="editor-split">
+            <label class="md-label">
+              <span>Body (Markdown)</span>
+              <textarea id={`${s.kind}-body`} data-body spellcheck="true"></textarea>
+            </label>
+            <div>
+              <span class="md-label"><span>Preview</span></span>
+              <div class="md-preview prose" data-preview aria-live="polite"></div>
+            </div>
+          </div>
+        )}
+
+        <details class="admin-files">
+          <summary>File preview <span class="muted small" data-path></span></summary>
+          <pre class="fm-preview" data-file></pre>
+        </details>
+
+        <div class="btn-row">
+          <button class="btn primary" type="button" data-act="commit" disabled>Commit</button>
+          <button class="btn" type="button" data-act="download">Download .md</button>
+          <button class="btn ghost" type="button" data-act="reset">New / clear</button>
+        </div>
+        <p class="admin-status" role="status" data-status></p>
+      </section>
+    ))}
+
+    <section class="admin-panel" role="tabpanel" id="panel-timeline" aria-labelledby="tab-timeline" hidden>
+      <p class="muted" id="tl-source">Showing the copy bundled with this build. Entries appear on the journey trail.</p>
+      <div class="btn-row">
+        <button class="btn small" type="button" id="tl-reload" disabled>Reload from GitHub</button>
+        <button class="btn small" type="button" id="tl-download">Download timeline.json</button>
+      </div>
+      <div class="table-scroll">
+        <table class="ledger admin-table">
+          <thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col">Title</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody id="tl-rows"></tbody>
+        </table>
+      </div>
+
+      <h2 id="tl-form-title" style="font-size:1.15rem;margin-top:1.6rem">Add an entry</h2>
+      <form id="tl-form" class="form-grid">
+        <input type="hidden" id="tl-id" />
+        <label>Type
+          <select id="tl-type" required>
+            {ENTRY_TYPES.map((t) => <option value={t}>{TYPE_META[t].label}</option>)}
+          </select>
+        </label>
+        <label>Start · YYYY, YYYY-MM, YYYY-MM-DD or TODO
+          <input type="text" id="tl-start" required pattern="TODO|\d{4}(-\d{2}(-\d{2})?)?" placeholder="2026-09" />
+        </label>
+        <label>End · optional, same formats or "present"
+          <input type="text" id="tl-end" pattern="present|TODO|\d{4}(-\d{2}(-\d{2})?)?" placeholder="present" />
+        </label>
+        <label class="wide">Title
+          <input type="text" id="tl-title-in" required maxlength="160" />
+        </label>
+        <label>Organisation / issuer
+          <input type="text" id="tl-org" maxlength="120" />
+        </label>
+        <label>Link · optional
+          <input type="url" id="tl-link" placeholder="https://" />
+        </label>
+        <label>Credential URL · optional
+          <input type="url" id="tl-cred" placeholder="https://" />
+        </label>
+        <label class="wide">Description
+          <textarea id="tl-desc" style="min-height:5rem"></textarea>
+        </label>
+        <label class="wide">Skill tags · comma-separated, e.g. Python, Playwright, API testing
+          <input type="text" id="tl-tags" />
+        </label>
+      </form>
+      <div class="btn-row">
+        <button class="btn primary" type="submit" form="tl-form" id="tl-save">Save entry (local only)</button>
+        <button class="btn ghost" type="button" id="tl-new">Clear form</button>
+      </div>
+      <p class="admin-status" id="tl-status" role="status"></p>
+    </section>
+
+    <script type="application/json" id="tl-bundled" set:html={JSON.stringify(rawTimeline).replace(/</g, '\\u003c')} />
+  </div>
+</Base>
+
+<script>
+  import { GitHubContents, GitHubApiError, type RepoRef } from '../lib/github-contents';
+  import { renderMarkdown } from '../lib/markdown';
+  import { composeParts, docSpecs, parseMarkdown, partValues, splitParts, toMarkdown, type DocSpec } from '../lib/admin-docs';
+  import { DATE_RE, formatRange, sortEntries, TYPE_META, type TimelineEntry, type EntryType } from '../lib/timeline';
+  import { todayIn } from '../lib/tracker';
+
+  type Repo = RepoRef & { timelinePath: string; dailyDir: string; blogDir: string; readingDir: string; tilDir: string; nowPath: string };
+  const TOKEN_KEY = 'admin:gh-token';
+  const root = document.getElementById('admin')!;
+  const cfg = JSON.parse(root.dataset.cfg!) as { repo: Repo; tz: string };
+  const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => document.getElementById(id) as T;
+  const esc = (s: unknown) =>
+    String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const splitTags = (s: string) => [...new Set(s.split(',').map((t) => t.trim()).filter(Boolean))];
+
+  function status(el: HTMLElement, html: string, kind: '' | 'ok' | 'err' = '') {
+    el.className = `admin-status${kind ? ' ' + kind : ''}`;
+    el.innerHTML = html;
+  }
+  const actionsUrl = () => `https://github.com/${cfg.repo.owner}/${cfg.repo.name}/actions`;
+  const committed = (url: string) =>
+    `Committed. <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">View commit ↗</a> · <a href="${actionsUrl()}" target="_blank" rel="noopener noreferrer">Watch the deploy ↗</a> (live in about a minute)`;
+  const errMsg = (e: unknown) => esc(e instanceof GitHubApiError ? e.message : e instanceof Error ? e.message : String(e));
+
+  function download(filename: string, text: string, type: string) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = filename;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  /* ---------------- tabs ---------------- */
+  const tabBtns = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  function selectTab(id: string, focus = false) {
+    const btn = tabBtns.find((b) => b.dataset.tab === id) ?? tabBtns[0];
+    for (const b of tabBtns) {
+      const on = b === btn;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+      $(`panel-${b.dataset.tab}`).hidden = !on;
+    }
+    if (focus) btn.focus();
+    history.replaceState(history.state, '', `#${btn.dataset.tab}`);
+  }
+  tabBtns.forEach((b, i) => {
+    b.addEventListener('click', () => selectTab(b.dataset.tab!));
+    b.addEventListener('keydown', (ev) => {
+      const n = tabBtns.length;
+      const to = ev.key === 'ArrowRight' ? (i + 1) % n : ev.key === 'ArrowLeft' ? (i - 1 + n) % n : ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : -1;
+      if (to < 0) return;
+      ev.preventDefault();
+      selectTab(tabBtns[to].dataset.tab!, true);
+    });
+  });
+
+  /* ---------------- connection ---------------- */
+  let gh: GitHubContents | null = null;
+  const connStatus = $('conn-status');
+  const onConnect: ((ok: boolean) => void)[] = [];
+
+  function setConnected(ok: boolean) {
+    ($('tl-reload') as HTMLButtonElement).disabled = !ok;
+    $('tl-save').textContent = ok ? 'Save & commit entry' : 'Save entry (local only)';
+    onConnect.forEach((f) => f(ok));
+  }
+
+  async function connect(token: string) {
+    status(connStatus, 'Verifying token…');
+    const client = new GitHubContents(token, cfg.repo);
+    try {
+      const info = await client.verify();
+      gh = client;
+      setConnected(true);
+      status(
+        connStatus,
+        `Connected to <strong>${esc(info.fullName)}</strong>${info.private ? ' (private)' : ''}. Commits go to <code>${esc(cfg.repo.branch)}</code>.${info.defaultBranch !== cfg.repo.branch ? ` <strong>Warning:</strong> the default branch is <code>${esc(info.defaultBranch)}</code>; check REPO.branch in src/config.ts.` : ''}`,
+        'ok',
+      );
+      await reloadTimeline();
+    } catch (e) {
+      gh = null;
+      setConnected(false);
+      status(connStatus, `✗ ${errMsg(e)}`, 'err');
+    }
+  }
+
+  $('token-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const t = $('token').value.trim();
+    if (!t) return status(connStatus, 'Paste a token first.', 'err');
+    try {
+      localStorage.setItem(TOKEN_KEY, t);
+    } catch {}
+    $('token').value = '';
+    connect(t);
+  });
+  $('token-forget').addEventListener('click', () => {
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch {}
+    gh = null;
+    setConnected(false);
+    status(connStatus, 'Token removed from this browser.');
+  });
+
+  /* ---------------- Markdown documents (daily, blog, reading, til, now) ---------------- */
+  function docEditor(spec: DocSpec) {
+    const panel = $(`panel-${spec.kind}`);
+    const q = <T extends Element>(sel: string) => panel.querySelector(sel) as T;
+    const form = q<HTMLFormElement>('[data-form]');
+    const body = panel.querySelector<HTMLTextAreaElement>('[data-body]');
+    const preview = panel.querySelector<HTMLElement>('[data-preview]');
+    // Split documents (daily): one fieldset per part, each with its own fields, editor and preview.
+    const parts = spec.parts ?? [];
+    const partIn = (part: string, key: string) => $(`${spec.kind}-${part}-${key}`) as HTMLInputElement;
+    const partBody = (part: string) => q<HTMLTextAreaElement>(`[data-part-body="${part}"]`);
+    const partBodies = () => Object.fromEntries(parts.map((p) => [p.key, partBody(p.key).value]));
+    const bodyText = () => (parts.length ? composeParts(spec, partBodies()) : body!.value);
+    const editors = parts.length ? parts.map((p) => partBody(p.key)) : [body!];
+    const filePre = q<HTMLElement>('[data-file]');
+    const pathEl = q<HTMLElement>('[data-path]');
+    const st = q<HTMLElement>('[data-status]');
+    const list = q<HTMLElement>('[data-list]');
+    const btn = (act: string) => q<HTMLButtonElement>(`[data-act="${act}"]`);
+    const input = (key: string) => $(`${spec.kind}-${key}`) as HTMLInputElement;
+    const DRAFT_KEY = `admin:draft:${spec.kind}`;
+    // When editing a file loaded from GitHub we keep its path and sha for a safe update.
+    let loaded: { path: string; sha: string } | null = null;
+
+    const values = (): Record<string, unknown> => {
+      const v: Record<string, unknown> = {};
+      for (const f of spec.fields) {
+        const el = input(f.key);
+        v[f.key] = f.type === 'check' ? el.checked : f.type === 'tags' ? splitTags(el.value) : el.value.trim();
+      }
+      for (const p of parts) {
+        const pv: Record<string, unknown> = {};
+        for (const f of p.fields) pv[f.key] = f.type === 'tags' ? splitTags(partIn(p.key, f.key).value) : partIn(p.key, f.key).value.trim();
+        v[p.key] = pv;
+      }
+      return v;
+    };
+    const targetPath = (v = values()) => loaded?.path ?? (spec.fixedPath || `${spec.dir}/${spec.fileName(v)}.md`);
+
+    function validate(v: Record<string, unknown>) {
+      for (const f of spec.fields) {
+        const val = v[f.key];
+        if (f.required && !String(val ?? '').trim()) throw new Error(`${f.label} is required.`);
+        if (f.type === 'date' && val && !/^\d{4}-\d{2}-\d{2}$/.test(String(val))) throw new Error(`${f.label} must be a date.`);
+        if (f.type === 'number' && val !== '') {
+          const n = Number(val);
+          if (!Number.isFinite(n) || (f.min !== undefined && n < f.min) || (f.max !== undefined && n > f.max))
+            throw new Error(`${f.label} must be a number from ${f.min} to ${f.max}.`);
+        }
+      }
+      for (const p of parts) {
+        const pv = v[p.key] as Record<string, unknown>;
+        for (const f of p.fields) {
+          if (f.type !== 'number' || pv[f.key] === '') continue;
+          const n = Number(pv[f.key]);
+          if (!Number.isFinite(n) || (f.min !== undefined && n < f.min) || (f.max !== undefined && n > f.max))
+            throw new Error(`${p.label}: ${f.label.toLowerCase()} must be a number from ${f.min} to ${f.max}.`);
+        }
+      }
+    }
+    const build = () => {
+      const v = values();
+      validate(v);
+      return { v, text: toMarkdown(spec, v, bodyText()) };
+    };
+
+    function refresh() {
+      const empty = '<p class="muted">Nothing to preview yet.</p>';
+      if (preview && body) preview.innerHTML = renderMarkdown(body.value) || empty;
+      for (const p of parts) q<HTMLElement>(`[data-part-preview="${p.key}"]`).innerHTML = renderMarkdown(partBody(p.key).value) || empty;
+      const v = values();
+      pathEl.textContent = `· ${loaded ? 'editing' : 'will create'} ${targetPath(v)}`;
+      filePre.textContent = toMarkdown(spec, v, bodyText());
+      try {
+        const raw: Record<string, unknown> = Object.fromEntries(spec.fields.map((f) => [f.key, f.type === 'check' ? input(f.key).checked : input(f.key).value]));
+        for (const p of parts) raw[p.key] = Object.fromEntries(p.fields.map((f) => [f.key, partIn(p.key, f.key).value]));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: raw, body: bodyText(), parts: parts.length ? partBodies() : undefined }));
+      } catch {}
+    }
+
+    function fill(fm: Record<string, unknown>, md: string, bodies?: Record<string, string>) {
+      const put = (el: HTMLInputElement, type: string, raw: unknown) => {
+        if (type === 'check') el.checked = raw === true || raw === 'true';
+        else if (type === 'tags') el.value = Array.isArray(raw) ? raw.join(', ') : String(raw ?? '');
+        else el.value = raw === undefined || raw === null ? '' : String(raw);
+      };
+      for (const f of spec.fields) put(input(f.key), f.type, fm[f.key]);
+      if (!parts.length) {
+        body!.value = md;
+        return;
+      }
+      const split = bodies ?? splitParts(fm, md);
+      for (const p of parts) {
+        const pv = partValues(fm, p.key);
+        for (const f of p.fields) put(partIn(p.key, f.key), f.type, pv[f.key]);
+        partBody(p.key).value = split[p.key] ?? '';
+      }
+    }
+
+    function reset(fromDraft: boolean) {
+      loaded = null;
+      let d: { v: Record<string, unknown>; body: string; parts?: Record<string, string> } | null = null;
+      if (fromDraft) {
+        try {
+          d = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null');
+        } catch {}
+      }
+      const today = todayIn(cfg.tz);
+      const defaults: Record<string, unknown> = {};
+      for (const f of spec.fields) defaults[f.key] = f.def === 'today' ? today : f.def ?? (f.type === 'select' ? f.options?.[0]?.value : '');
+      if (spec.kind === 'now' && !d) defaults.title = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: cfg.tz });
+      fill(d?.v ?? defaults, d?.body ?? spec.body, d?.parts);
+      refresh();
+    }
+
+    async function load(path: string) {
+      if (!gh) return;
+      try {
+        const f = await gh.getFile(path);
+        if (!f) return status(st, `${esc(path)} does not exist yet. Saving will create it.`);
+        const { fm, body: md } = parseMarkdown(f.text);
+        fill(fm, md);
+        if (spec.fields.some((x) => x.key === 'slug')) input('slug').value = path.split('/').pop()!.replace(/\.md$/, '').replace(/^\d{4}-\d{2}-\d{2}-/, spec.kind === 'til' ? '' : '$&');
+        loaded = { path: f.path, sha: f.sha };
+        refresh();
+        status(st, `Loaded ${esc(f.path)}. Saving updates this file.`, 'ok');
+        editors[0].focus();
+      } catch (e) {
+        status(st, `✗ ${errMsg(e)}`, 'err');
+      }
+    }
+
+    async function listFiles() {
+      if (!gh) return;
+      if (!spec.dir) return load(spec.fixedPath!);
+      list.innerHTML = '<li class="muted">Loading…</li>';
+      try {
+        const files = (await gh.listDir(spec.dir)).filter((f) => f.name.endsWith('.md') && !f.name.startsWith('_')).reverse();
+        list.innerHTML = files.length
+          ? files.map((f) => `<li><code class="grow">${esc(f.name)}</code><button class="btn small" type="button" data-load="${esc(f.path)}">Edit</button></li>`).join('')
+          : '<li class="muted">No files yet.</li>';
+      } catch (e) {
+        list.innerHTML = `<li class="admin-status err">✗ ${errMsg(e)}</li>`;
+      }
+    }
+
+    async function freePath(base: string): Promise<string> {
+      for (let n = 2; n < 20; n++) {
+        const p = `${spec.dir}/${base}-${n}.md`;
+        if (!(await gh!.getFile(p))) return p;
+      }
+      throw new Error('Too many files with this name.');
+    }
+
+    async function commit() {
+      if (!gh) return status(st, 'Connect a token first, or use Download .md.', 'err');
+      let built: ReturnType<typeof build>;
+      try {
+        built = build();
+      } catch (e) {
+        return status(st, errMsg(e), 'err');
+      }
+      status(st, 'Committing…');
+      try {
+        let path = targetPath(built.v);
+        let sha = loaded?.sha;
+        if (!loaded) {
+          const existing = await gh.getFile(path);
+          if (existing) {
+            if (spec.onExists === 'suffix') {
+              if (!confirm(`${path} already exists.\n\nOK = add a second entry for that day.\nCancel = stop (use "Files on GitHub" to edit it instead).`))
+                return status(st, 'Cancelled. Nothing was committed.');
+              path = await freePath(spec.fileName(built.v));
+            } else {
+              if (!confirm(`${path} already exists.\n\nOK = overwrite it with this version.\nCancel = stop (load it from "Files on GitHub" to edit it).`))
+                return status(st, 'Cancelled. Nothing was committed.');
+              sha = existing.sha;
+            }
+          }
+        }
+        const verb = loaded || sha ? 'Update' : 'Add';
+        const res = await gh.putFile(path, built.text, `${verb} ${spec.label.toLowerCase()}: ${String(built.v.title || built.v.date || path)}`, sha);
+        loaded = { path, sha: res.contentSha };
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {}
+        refresh();
+        status(st, committed(res.commitUrl), 'ok');
+      } catch (e) {
+        const conflict = e instanceof GitHubApiError && (e.status === 409 || e.status === 422);
+        status(
+          st,
+          `✗ ${errMsg(e)}${conflict ? ' Somebody changed the file: copy your text, load the latest version, re-apply the edit and save again.' : ''} Your text is still here and saved as a draft in this browser.`,
+          'err',
+        );
+      }
+    }
+
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    form.addEventListener('submit', (ev) => ev.preventDefault());
+    for (const el of panel.querySelectorAll('[data-part]')) {
+      el.addEventListener('input', refresh);
+      el.addEventListener('change', refresh);
+    }
+    for (const ed of editors) {
+      if (!parts.length) ed.addEventListener('input', refresh);
+      ed.addEventListener('keydown', (ev) => {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === 's') {
+          ev.preventDefault();
+          gh ? commit() : btn('download').click();
+        }
+      });
+    }
+    btn('list').addEventListener('click', listFiles);
+    list.addEventListener('click', (ev) => {
+      const p = (ev.target as HTMLElement).closest<HTMLElement>('[data-load]')?.dataset.load;
+      if (p) load(p);
+    });
+    btn('commit').addEventListener('click', commit);
+    btn('download').addEventListener('click', () => {
+      try {
+        const { v, text } = build();
+        const name = targetPath(v).split('/').pop()!;
+        download(name, text, 'text/markdown');
+        status(st, `Downloaded ${esc(name)}. Put it in <code>${esc(spec.dir ?? spec.fixedPath!.replace(/\/[^/]+$/, ''))}/</code> and commit it.`, 'ok');
+      } catch (e) {
+        status(st, errMsg(e), 'err');
+      }
+    });
+    btn('reset').addEventListener('click', () => {
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {}
+      reset(false);
+      status(st, '');
+    });
+    onConnect.push((ok) => {
+      btn('commit').disabled = !ok;
+      btn('list').disabled = !ok;
+    });
+    reset(true);
+  }
+  docSpecs(cfg.repo).forEach(docEditor);
+
+  /* ---------------- timeline ---------------- */
+  let timeline: TimelineEntry[] = JSON.parse($('tl-bundled').textContent!);
+  const tlStatus = $('tl-status');
+
+  const serialize = (list: TimelineEntry[]) =>
+    JSON.stringify(
+      sortEntries(list).map(({ source, stars, ...rest }) => rest),
+      null,
+      2,
+    ) + '\n';
+
+  function renderRows() {
+    const rows = sortEntries(timeline);
+    $('tl-rows').innerHTML = rows.length
+      ? rows
+          .map(
+            (e) => `<tr>
+          <td>${esc(formatRange(e))}</td>
+          <td>${esc(TYPE_META[e.type]?.label ?? e.type)}</td>
+          <td>${esc(e.title)}${e.org ? `<br><span class="muted">${esc(e.org)}</span>` : ''}</td>
+          <td class="row-acts"><button class="btn small" type="button" data-edit="${esc(e.id)}">Edit<span class="sr-only"> ${esc(e.title)}</span></button> <button class="btn small ghost" type="button" data-del="${esc(e.id)}">Delete<span class="sr-only"> ${esc(e.title)}</span></button></td>
+        </tr>`,
+          )
+          .join('')
+      : '<tr><td colspan="4" class="muted">No entries.</td></tr>';
+  }
+
+  async function reloadTimeline() {
+    if (!gh) return;
+    try {
+      const f = await gh.getFile(cfg.repo.timelinePath);
+      if (f) {
+        timeline = JSON.parse(f.text);
+        $('tl-source').textContent = `Showing the latest ${cfg.repo.timelinePath} from GitHub.`;
+      } else {
+        $('tl-source').textContent = `${cfg.repo.timelinePath} is not in the repo yet. Saving will create it.`;
+      }
+      renderRows();
+    } catch (e) {
+      status(tlStatus, `Could not load the timeline from GitHub: ${errMsg(e)}`, 'err');
+    }
+  }
+
+  const area = (id: string) => $(id) as unknown as HTMLTextAreaElement;
+  const sel = (id: string) => $(id) as unknown as HTMLSelectElement;
+
+  function fillForm(e?: TimelineEntry) {
+    $('tl-id').value = e?.id ?? '';
+    sel('tl-type').value = e?.type ?? 'project';
+    $('tl-start').value = e?.start ?? '';
+    $('tl-end').value = e?.end ?? '';
+    $('tl-title-in').value = e?.title ?? '';
+    $('tl-org').value = e?.org ?? '';
+    $('tl-link').value = e?.link ?? '';
+    $('tl-cred').value = e?.credential ?? '';
+    area('tl-desc').value = e?.description ?? '';
+    $('tl-tags').value = (e?.tags ?? []).join(', ');
+    $('tl-form-title').textContent = e ? `Edit: ${e.title}` : 'Add an entry';
+  }
+
+  function readForm(): TimelineEntry {
+    const title = $('tl-title-in').value.trim();
+    const type = sel('tl-type').value as EntryType;
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'entry';
+    const e: TimelineEntry = {
+      id: $('tl-id').value || `${type}-${slug}-${Date.now().toString(36)}`,
+      type,
+      title,
+      start: $('tl-start').value.trim() || 'TODO',
+    };
+    const opt = (k: keyof TimelineEntry, v: string) => {
+      if (v.trim()) (e as any)[k] = v.trim();
+    };
+    opt('end', $('tl-end').value);
+    opt('org', $('tl-org').value);
+    opt('description', area('tl-desc').value);
+    opt('link', $('tl-link').value);
+    opt('credential', $('tl-cred').value);
+    e.tags = splitTags($('tl-tags').value);
+    if (!title) throw new Error('Title is required.');
+    if (e.start !== 'TODO' && !DATE_RE.test(e.start)) throw new Error('Start must be YYYY, YYYY-MM, YYYY-MM-DD or TODO.');
+    if (e.end && !['present', 'TODO'].includes(e.end) && !DATE_RE.test(e.end)) throw new Error('End must be a date, "present" or empty.');
+    return e;
+  }
+
+  type Op = { kind: 'upsert'; entry: TimelineEntry } | { kind: 'delete'; id: string };
+  const applyOp = (list: TimelineEntry[], op: Op): TimelineEntry[] =>
+    op.kind === 'delete'
+      ? list.filter((x) => x.id !== op.id)
+      : list.some((x) => x.id === op.entry.id)
+        ? list.map((x) => (x.id === op.entry.id ? op.entry : x))
+        : [...list, op.entry];
+
+  async function commitOp(op: Op, message: string) {
+    // Always update the local copy, so "Download" reflects the change even offline.
+    timeline = applyOp(timeline, op);
+    renderRows();
+    if (!gh) {
+      status(tlStatus, 'Saved locally only (not connected). Download timeline.json and replace <code>src/data/timeline.json</code> in the repo.');
+      return;
+    }
+    status(tlStatus, 'Committing…');
+    try {
+      // Re-applies the operation to the latest version on GitHub, so concurrent edits aren't lost.
+      const res = await gh.updateText(cfg.repo.timelinePath, (cur) => serialize(applyOp(cur ? JSON.parse(cur) : [], op)), message);
+      timeline = JSON.parse(res.text);
+      renderRows();
+      status(tlStatus, committed(res.commitUrl), 'ok');
+    } catch (e) {
+      status(tlStatus, `✗ Commit failed: ${errMsg(e)} Your change is kept locally; you can download it.`, 'err');
+    }
+  }
+
+  $('tl-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    let entry: TimelineEntry;
+    try {
+      entry = readForm();
+    } catch (e) {
+      return status(tlStatus, errMsg(e), 'err');
+    }
+    const isEdit = timeline.some((x) => x.id === entry.id);
+    commitOp({ kind: 'upsert', entry }, `${isEdit ? 'Update' : 'Add'} timeline entry: ${entry.title}`);
+    fillForm();
+  });
+  $('tl-rows').addEventListener('click', (ev) => {
+    const t = (ev.target as HTMLElement).closest<HTMLElement>('button');
+    if (!t) return;
+    const editId = t.dataset.edit;
+    const delId = t.dataset.del;
+    if (editId) {
+      fillForm(timeline.find((x) => x.id === editId));
+      $('tl-title-in').focus();
+    } else if (delId) {
+      const e = timeline.find((x) => x.id === delId);
+      if (e && confirm(`Delete "${e.title}"?`)) commitOp({ kind: 'delete', id: delId }, `Delete timeline entry: ${e.title}`);
+    }
+  });
+  $('tl-new').addEventListener('click', () => fillForm());
+  $('tl-reload').addEventListener('click', reloadTimeline);
+  $('tl-download').addEventListener('click', () => download('timeline.json', serialize(timeline), 'application/json'));
+
+  /* ---------------- boot ---------------- */
+  renderRows();
+  fillForm();
+  setConnected(false);
+  const fromHash = location.hash.slice(1);
+  if (tabBtns.some((b) => b.dataset.tab === fromHash)) selectTab(fromHash);
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(TOKEN_KEY);
+  } catch {}
+  if (saved) connect(saved);
+</script>

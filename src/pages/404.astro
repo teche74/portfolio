@@ -1,0 +1,18 @@
+---
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import { url } from '../lib/url';
+---
+<Base title="404: page torn out" noindex paper="plain" section="Missing page">
+  <div class="stub-edge" aria-hidden="true"></div>
+  <section class="torn-page" aria-labelledby="nf-title">
+    <p class="kicker" style="margin:0">expected 200 · got 404</p>
+    <h1 id="nf-title" class="page-title">This page was torn out</h1>
+    <p>Whatever was written here has gone. It may have moved, or it never existed.</p>
+    <p class="hand" style="font-size:1.5rem;color:var(--red);rotate:-2deg" aria-hidden="true">(bug filed, severity: low)</p>
+    <div class="btn-row" style="justify-content:center">
+      <a class="btn primary" href={url('/')}>Back to the contents</a>
+      <button type="button" class="btn ghost" data-palette-open><Icon name="search" /> Search the notebook</button>
+    </div>
+  </section>
+</Base>

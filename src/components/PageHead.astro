@@ -1,0 +1,17 @@
+---
+/** The heading block every section page starts with: kicker (page number), title, lede. */
+interface Props {
+  no?: number | string;
+  kicker: string;
+  title: string;
+  lede?: string;
+  id?: string;
+}
+const { no, kicker, title, lede, id = 'page-title' } = Astro.props;
+---
+<header class="page-head">
+  <p class="kicker">{no !== undefined && <span class="kno">p. {no}</span>}{kicker}</p>
+  <h1 class="page-title" id={id}>{title}</h1>
+  {lede && <p class="lede">{lede}</p>}
+  <slot />
+</header>

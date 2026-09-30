@@ -1,0 +1,226 @@
+---
+/**
+ * Page 45: the bookshelf. Books stand on three shelves (reading now, finished, want to read);
+ * each spine's colour and height come from a hash of its title and its width from the page
+ * count. Choosing a spine pulls the book out into a panel with its rating, a progress
+ * ribbon and the notes. Everything that isn't a book lives in the index-card drawer.
+ * Keyboard: Tab to a spine, arrows / Home / End move along the shelves, Enter opens, Esc closes.
+ */
+import { render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import EmptyState from '../components/EmptyState.astro';
+import SampleNote from '../components/SampleNote.astro';
+import { TIMEZONE } from '../config';
+import { getReading, readingStats, spineOf, starsHtml, tiltOf, type Read } from '../lib/content';
+import { STATUS_LABEL, TYPE_LABEL, READING_STATUS } from '../lib/reading-meta';
+import { formatDay } from '../lib/daily';
+import { todayIn } from '../lib/tracker';
+
+const items = await getReading();
+const books = items.filter((r) => r.data.type === 'book');
+const others = items.filter((r) => r.data.type !== 'book');
+const today = todayIn(TIMEZONE);
+const stats = readingStats(items, today);
+const year = today.slice(0, 4);
+const shelves = READING_STATUS.map((s) => ({ status: s, label: STATUS_LABEL[s], books: books.filter((b) => b.data.status === s) })).filter((s) => s.books.length);
+const rendered = await Promise.all(items.map(async (r) => ({ id: r.id, Content: (await render(r)).Content })));
+const contentFor = new Map(rendered.map((x) => [x.id, x.Content]));
+const hasBody = (r: Read) => !!r.body?.trim();
+const dates = (r: Read) =>
+  [r.data.started && `started ${formatDay(r.data.started)}`, r.data.finished && `finished ${formatDay(r.data.finished)}`].filter(Boolean).join(' · ');
+const surname = (a: string) => (a.split(',')[0].trim().split(/\s+/).pop() ?? '').slice(0, 10);
+---
+<Base title="Reading" description="Books on the shelf, and the articles, papers, videos and courses in the card drawer." active="reading" paper="plain">
+  <div id="reading-root">
+    <PageHead no={45} kicker="Reading · shelf & drawer" title="The bookshelf" lede="Pull a book off the shelf to see what I made of it. Shorter things are filed in the drawer below." />
+
+    <dl class="shelf-stats">
+      <div><dt>books finished in {year}</dt><dd><strong>{stats.booksThisYear}</strong></dd></div>
+      <div><dt>pages read</dt><dd><strong>{stats.pagesRead.toLocaleString('en-IN')}</strong></dd></div>
+      <div><dt>finished, all time</dt><dd><strong>{stats.finishedTotal}</strong></dd></div>
+      <div><dt>month streak</dt><dd><strong>{stats.monthStreak}</strong></dd></div>
+    </dl>
+
+    {books.length === 0 ? (
+      <EmptyState title="The shelf is empty">Add a book with <code>npm run new:read -- "Title"</code> or the Reading tab in /admin.</EmptyState>
+    ) : (
+      <div class="bookcase" data-reveal>
+        {shelves.map((s) => (
+          <div class="shelf-row">
+            <h2 class="shelf-label" id={`shelf-${s.status}`}>{s.label} · {s.books.length}</h2>
+            <ul class="shelf" aria-labelledby={`shelf-${s.status}`}>
+              {s.books.map((b) => {
+                const sp = spineOf(b.data.title, b.data.pages);
+                return (
+                  <li>
+                    <button
+                      type="button"
+                      class={`spine sp-c${sp.color} band-${sp.band}`}
+                      style={`--h:${sp.height}px;--w:${sp.width}px`}
+                      data-book={b.id}
+                      id={`spine-${b.id}`}
+                      aria-expanded="false"
+                      aria-controls="book-panel"
+                      aria-label={`${b.data.title}${b.data.author ? ` by ${b.data.author}` : ''}${b.data.sample ? ' (sample)' : ''}`}
+                    >
+                      <span class="spine-t" aria-hidden="true">{b.data.title}</span>
+                      <span class="spine-a" aria-hidden="true">{surname(b.data.author)}</span>
+                      {b.data.sample && <span class="sp-sample" aria-hidden="true">sample</span>}
+                    </button>
+                  </li>
+                );
+              })}
+              <li aria-hidden="true"><span class="bookend"></span></li>
+            </ul>
+          </div>
+        ))}
+      </div>
+    )}
+    {books.length > 0 && <p class="muted small" style="margin-top:.6rem">Choose a spine to pull the book out. Arrow keys move along the shelves; Esc puts it back.</p>}
+
+    <section id="book-panel" class="book-panel" hidden tabindex="-1" aria-label="Selected book"></section>
+
+    {books.map((b) => {
+      const sp = spineOf(b.data.title, b.data.pages);
+      const Content = contentFor.get(b.id)!;
+      const reading = b.data.status === 'reading' && b.data.progress !== undefined;
+      return (
+        <template id={`bk-${b.id}`}>
+          <div class={`bp-cover sp-c${sp.color}`} aria-hidden="true">
+            <span class="bpc-t">{b.data.title}</span>
+            <span class="bpc-a">{b.data.author}</span>
+            {reading && <span class="bp-ribbon" style={`--p:${b.data.progress}%`}></span>}
+          </div>
+          <div class="bp-body">
+            <h2 id="bp-title">{b.data.title}</h2>
+            {b.data.author && <p class="muted" style="margin:0 0 .4rem">{b.data.author}</p>}
+            <p class="bp-meta">
+              <span>{STATUS_LABEL[b.data.status]}</span>
+              {b.data.pages && <span>{b.data.pages} pages</span>}
+              {reading && <span>{b.data.progress}% through</span>}
+              {dates(b) && <span>{dates(b)}</span>}
+            </p>
+            {b.data.rating !== undefined && <Fragment set:html={starsHtml(b.data.rating)} />}
+            {b.data.tags.length > 0 && <p class="hl-tags" style="margin:.6rem 0">{b.data.tags.map((t) => <span class="hl-tag">{t}</span>)}</p>}
+            {b.data.sample && <SampleNote />}
+            {hasBody(b) && <div class="bp-notes prose"><Content /></div>}
+            {b.data.url && <p><a href={b.data.url} target="_blank" rel="noopener noreferrer">About this book ↗<span class="sr-only"> (opens in new tab)</span></a></p>}
+          </div>
+          <button type="button" class="icon-btn bp-close" data-close aria-label="Put the book back on the shelf">✕</button>
+        </template>
+      );
+    })}
+
+    <section aria-labelledby="drawer-h" style="margin-top:2.6rem">
+      <div class="section-title"><h2 id="drawer-h">The card drawer</h2><span class="aside">articles, papers, videos and courses</span></div>
+      {others.length === 0 ? (
+        <p class="muted">No cards filed yet.</p>
+      ) : (
+        <div class="card-drawer">
+          <ul class="drawer-cards">
+            {others.map((r) => {
+              const Content = contentFor.get(r.id)!;
+              return (
+                <li class="index-card" id={r.id} style={`--tilt:${tiltOf(r.id, 1.5)}deg`}>
+                  <p class="ic-type">{TYPE_LABEL[r.data.type]} · {STATUS_LABEL[r.data.status]}</p>
+                  <h3>
+                    {r.data.url ? (
+                      <a href={r.data.url} target="_blank" rel="noopener noreferrer">{r.data.title}<span class="sr-only"> (opens in new tab)</span></a>
+                    ) : (
+                      r.data.title
+                    )}
+                  </h3>
+                  {r.data.author && <p class="ic-meta">{r.data.author}</p>}
+                  {dates(r) && <p class="ic-meta">{dates(r)}</p>}
+                  {r.data.rating !== undefined && <Fragment set:html={starsHtml(r.data.rating)} />}
+                  {hasBody(r) && <div class="bp-notes"><Content /></div>}
+                  {r.data.sample && <SampleNote />}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { onPage, prefersReducedMotion } from '../scripts/lifecycle';
+
+  onPage('reading-root', (root) => {
+    const panel = root.querySelector<HTMLElement>('#book-panel');
+    const spines = [...root.querySelectorAll<HTMLButtonElement>('.spine')];
+    if (!panel || !spines.length) return;
+    let current: HTMLButtonElement | null = null;
+
+    function close(focusBack = true) {
+      if (!current || !panel) return;
+      current.setAttribute('aria-expanded', 'false');
+      panel.hidden = true;
+      panel.innerHTML = '';
+      if (focusBack) current.focus();
+      current = null;
+      if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
+    }
+
+    function open(btn: HTMLButtonElement, focusPanel = true) {
+      if (!panel) return;
+      const id = btn.dataset.book!;
+      const tpl = document.getElementById(`bk-${id}`) as HTMLTemplateElement | null;
+      if (!tpl) return;
+      if (current === btn) return close();
+      current?.setAttribute('aria-expanded', 'false');
+      current = btn;
+      btn.setAttribute('aria-expanded', 'true');
+      panel.innerHTML = '';
+      panel.append(tpl.content.cloneNode(true));
+      panel.setAttribute('aria-labelledby', 'bp-title');
+      panel.removeAttribute('aria-label');
+      panel.hidden = false;
+      panel.classList.remove('opening');
+      if (!prefersReducedMotion()) {
+        void panel.offsetWidth;
+        panel.classList.add('opening');
+      }
+      panel.querySelector('[data-close]')?.addEventListener('click', () => close());
+      history.replaceState(history.state, '', `#${id}`);
+      if (focusPanel) {
+        panel.focus({ preventScroll: true });
+        panel.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      }
+    }
+
+    spines.forEach((b) => b.addEventListener('click', () => open(b)));
+
+    root.addEventListener('keydown', (e) => {
+      const t = e.target as HTMLElement;
+      if (e.key === 'Escape' && current && (panel.contains(t) || t.classList.contains('spine'))) {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (!t.classList.contains('spine')) return;
+      const i = spines.indexOf(t as HTMLButtonElement);
+      let n = -1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') n = Math.min(spines.length - 1, i + 1);
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') n = Math.max(0, i - 1);
+      else if (e.key === 'Home') n = 0;
+      else if (e.key === 'End') n = spines.length - 1;
+      if (n >= 0) {
+        e.preventDefault();
+        spines[n].focus();
+        spines[n].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+    });
+
+    // Deep link: /reading/#book-id pulls that book out on load.
+    const hash = decodeURIComponent(location.hash.slice(1));
+    const target = hash ? spines.find((s) => s.dataset.book === hash) : undefined;
+    if (target) {
+      open(target, false);
+      target.scrollIntoView({ block: 'center' });
+    }
+  });
+</script>

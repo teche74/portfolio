@@ -1,0 +1,156 @@
+---
+/**
+ * The Journey trail map. Hand-written stops (src/data/timeline.json) are rendered at build
+ * time; the browser adds public GitHub repos as quarterly "camps" and redraws the dashed
+ * trail through every visible pin. The map key toggles each kind of stop on and off.
+ */
+import { GITHUB_USERNAME, TIMELINE, TIMEZONE, isSet } from '../config';
+import { getTimeline } from '../lib/timeline-data';
+import { KIND_META, TRAIL_KINDS, kindOf, sortEntries, trailHtml } from '../lib/timeline';
+
+const manual = sortEntries(getTimeline());
+const ghUser = TIMELINE.includeGitHubRepos && isSet(GITHUB_USERNAME) ? GITHUB_USERNAME : '';
+const counts = Object.fromEntries(TRAIL_KINDS.map((k) => [k, manual.filter((e) => kindOf(e) === k).length]));
+const opts = { username: ghUser, includeForks: TIMELINE.includeForks, timeZone: TIMEZONE };
+const kinds = TRAIL_KINDS.filter((k) => k !== 'camp' || ghUser);
+---
+<div class="journey" id="journey-root" data-opts={JSON.stringify(opts)}>
+  <fieldset class="map-key">
+    <legend>Map key · tap to hide or show</legend>
+    <div class="key-items">
+      {kinds.map((k) => (
+        <button type="button" class="key-item" data-kind={k} aria-pressed="true">
+          <span class={`key-g k-${k}`} aria-hidden="true"></span>{KIND_META[k].label}
+          <span class="cnt" data-count-kind={k}>{k === 'camp' ? '…' : counts[k]}</span>
+        </button>
+      ))}
+    </div>
+  </fieldset>
+  <p class="map-status" id="journey-status" aria-live="polite">{ghUser ? 'Fetching GitHub camps…' : ''}</p>
+
+  <div class="trail-wrap" id="trail-wrap">
+    <svg class="trail-line" aria-hidden="true" focusable="false">
+      <defs>
+        <mask id="trail-mask" maskUnits="userSpaceOnUse">
+          <path class="tl-mask" pathLength="1" />
+        </mask>
+      </defs>
+      <path class="tl-dash" mask="url(#trail-mask)" />
+    </svg>
+    <ol class="trail" id="trail-list" aria-label="Journey, oldest first" set:html={trailHtml(manual)} />
+  </div>
+  <p class="muted" id="trail-empty" hidden>Every kind of stop is hidden. Turn one back on in the map key.</p>
+  <script type="application/json" id="timeline-data" set:html={JSON.stringify(manual).replace(/</g, '\\u003c')} />
+</div>
+
+<script>
+  import { getGitHubData } from '../lib/profiles-client';
+  import { reposToEntries, sortEntries, trailHtml, type TimelineEntry } from '../lib/timeline';
+  import { onPage, prefersReducedMotion } from '../scripts/lifecycle';
+  import { refreshMotion } from '../scripts/motion';
+
+  onPage('journey-root', (root) => {
+    const opts = JSON.parse(root.dataset.opts!) as { username: string; includeForks: boolean; timeZone: string };
+    const manual = JSON.parse(root.querySelector('#timeline-data')!.textContent!) as TimelineEntry[];
+    const wrap = root.querySelector<HTMLElement>('#trail-wrap')!;
+    const list = root.querySelector<HTMLElement>('#trail-list')!;
+    const svg = wrap.querySelector<SVGSVGElement>('.trail-line')!;
+    const dash = svg.querySelector<SVGPathElement>('.tl-dash')!;
+    const mask = svg.querySelector<SVGPathElement>('.tl-mask')!;
+    const status = root.querySelector<HTMLElement>('#journey-status')!;
+    const empty = root.querySelector<HTMLElement>('#trail-empty')!;
+    const off = new Set<string>();
+
+    /** A serpentine path through the centre of every visible pin. */
+    function drawPath() {
+      const box = wrap.getBoundingClientRect();
+      const pts = [...list.querySelectorAll<HTMLElement>('.trail-stop:not([hidden]) .pin')].map((p) => {
+        const r = p.getBoundingClientRect();
+        return [r.left + r.width / 2 - box.left, r.top + r.height / 2 - box.top];
+      });
+      svg.setAttribute('viewBox', `0 0 ${Math.round(box.width)} ${Math.round(box.height)}`);
+      if (pts.length < 2) {
+        dash.setAttribute('d', '');
+        mask.setAttribute('d', '');
+        return;
+      }
+      let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+      for (let i = 1; i < pts.length; i++) {
+        const [x0, y0] = pts[i - 1];
+        const [x1, y1] = pts[i];
+        const my = (y0 + y1) / 2;
+        d += ` C${x0.toFixed(1)} ${my.toFixed(1)} ${x1.toFixed(1)} ${my.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+      }
+      dash.setAttribute('d', d);
+      mask.setAttribute('d', d);
+      onScroll();
+    }
+
+    /** The trail inks itself in as you walk (scroll) down it. */
+    function onScroll() {
+      if (prefersReducedMotion()) {
+        mask.style.strokeDasharray = 'none';
+        return;
+      }
+      const r = wrap.getBoundingClientRect();
+      const p = Math.min(1, Math.max(0, (innerHeight * 0.75 - r.top) / r.height));
+      mask.style.strokeDasharray = '1 1';
+      mask.style.strokeDashoffset = String(1 - p);
+    }
+
+    function applyKey() {
+      let visible = 0;
+      list.querySelectorAll<HTMLElement>('.trail-stop').forEach((li) => {
+        const k = li.dataset.kind!;
+        li.hidden = k !== 'here' && off.has(k);
+        if (!li.hidden && k !== 'here') visible++;
+      });
+      empty.hidden = visible > 0;
+      requestAnimationFrame(drawPath);
+    }
+
+    function render(entries: TimelineEntry[]) {
+      list.innerHTML = trailHtml(entries);
+      applyKey();
+      refreshMotion(list);
+    }
+
+    root.querySelectorAll<HTMLButtonElement>('.key-item').forEach((b) =>
+      b.addEventListener('click', () => {
+        const k = b.dataset.kind!;
+        const on = b.getAttribute('aria-pressed') !== 'true';
+        b.setAttribute('aria-pressed', String(on));
+        if (on) off.delete(k);
+        else off.add(k);
+        applyKey();
+      }),
+    );
+
+    // Camps open/close changes the height: redraw.
+    list.addEventListener('toggle', () => requestAnimationFrame(drawPath), true);
+    const ro = new ResizeObserver(() => drawPath());
+    ro.observe(wrap);
+    addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('astro:before-swap', () => {
+      ro.disconnect();
+      removeEventListener('scroll', onScroll);
+    }, { once: true });
+    applyKey();
+
+    const campCount = root.querySelector('[data-count-kind="camp"]');
+    if (opts.username) {
+      getGitHubData(opts.username).then((r) => {
+        if (!root.isConnected) return;
+        if (r.data) {
+          const auto = reposToEntries(r.data.repos, opts, manual);
+          render(sortEntries([...manual, ...auto]));
+          if (campCount) campCount.textContent = String(auto.length);
+          status.textContent = `${auto.length} public GitHub repositories, grouped into quarterly camps${r.stale ? ' (cached copy; the GitHub API is unavailable right now)' : ''}.`;
+        } else {
+          if (campCount) campCount.textContent = '0';
+          status.textContent = 'GitHub camps could not be loaded right now, so only the hand-written stops are on the map.';
+        }
+      });
+    }
+  });
+</script>

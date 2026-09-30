@@ -1,0 +1,220 @@
+---
+/**
+ * The tracker: streak and hours in tally marks, an ink-stamp year heatmap (both halves, or
+ * only "At work" / only "Self-improvement"), rough charts (entries per month, hours per week
+ * stacked work vs self, topics per month) and monthly recap slips. Streaks count any logging.
+ * Everything is rendered at build time and recomputed in the browser in IST, because a
+ * static build can be days old by the time someone looks at it.
+ */
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import { TIMEZONE } from '../../config';
+import { getDailyEntries, logItemOf } from '../../lib/daily';
+import {
+  computeStats,
+  heatmapHtml,
+  marqueeHtml,
+  monthBarsHtml,
+  monthCounts,
+  monthlyRecaps,
+  prettyDay,
+  recapsHtml,
+  recentTags,
+  todayIn,
+  topicsByMonthHtml,
+  weeklyHoursHtml,
+  yearsOf,
+  type LogItem,
+} from '../../lib/tracker';
+import { tallyHtml } from '../../lib/motifs';
+import { url } from '../../lib/url';
+
+const entries = await getDailyEntries();
+const items: LogItem[] = entries.map(logItemOf);
+const today = todayIn(TIMEZONE);
+const s = computeStats(items, today);
+const years = yearsOf(items, today);
+const year = years[0];
+const base = url('/practice/');
+const hrefFor = (id: string) => `${base}${id}/`;
+const yearCount = items.filter((i) => i.date.startsWith(`${year}-`)).length;
+const note = s.loggedToday
+  ? 'Logged today. Nice.'
+  : s.currentStreak > 0
+    ? `Not logged yet today; log something to keep the ${s.currentStreak}-day streak.`
+    : 'Nothing logged today yet.';
+const json = JSON.stringify(items).replace(/</g, '\\u003c');
+---
+<Base title="Practice tracker" description="Streaks, hours, a year heatmap and topic charts for the daily practice log." active="practice" paper="graph">
+  <div id="tracker-root" data-tz={TIMEZONE} data-base={base}>
+    <PageHead no={22} kicker="Practice · tracker" title="Tally sheet" lede="The logbook, counted: streaks, hours in tally marks, a year of ink stamps and what the topics were." />
+    <p class="kicker" style="margin-left:0"><a href={url('/practice/')}>← the logbook</a> · <a href={url('/practice/efforts/')}>efforts ledger</a></p>
+
+    <div class="tracker-grid">
+      <section class="tracker-top" aria-label="Summary">
+        <span class="stamp round" style="--rot:-8deg">
+          <span>streak</span><strong data-stat="current">{s.currentStreak}</strong><span data-stat-label="current">{s.currentStreak === 1 ? 'day' : 'days'}</span>
+        </span>
+        <div class="streak-box">
+          <span class="lbl">Hours, in tally marks</span>
+          <span class="tally-big" data-stat="tally" set:html={tallyHtml(s.totalHours) || '<span class="side-none">no marks yet</span>'} />
+        </div>
+        <dl class="scores" style="flex:1 1 22rem;margin:0">
+          <div class="score"><dt class="score-l">longest streak</dt><dd class="score-v" data-stat="longest">{s.longestStreak}d</dd></div>
+          <div class="score"><dt class="score-l" data-stat-label="year">entries in {year}</dt><dd class="score-v" data-stat="year">{yearCount}</dd></div>
+          <div class="score"><dt class="score-l">entries, all time</dt><dd class="score-v" data-stat="total">{s.totalEntries}</dd></div>
+          <div class="score"><dt class="score-l">active days</dt><dd class="score-v" data-stat="days">{s.activeDays}</dd></div>
+          <div class="score"><dt class="score-l">hours logged</dt><dd class="score-v" data-stat="hours">{s.totalHours}</dd></div>
+          <div class="score"><dt class="score-l">at work</dt><dd class="score-v" data-stat="work">{s.workHours}h</dd></div>
+          <div class="score"><dt class="score-l">self-improvement</dt><dd class="score-v" data-stat="self">{s.selfHours}h</dd></div>
+        </dl>
+      </section>
+
+      <p class="pencil-note" id="today-note" aria-live="polite">{prettyDay(today)} · {note}</p>
+
+      <section class="panel" aria-labelledby="hm-h">
+        <div class="chart-head">
+          <h2 id="hm-h" class="panel-title">A year of ink stamps</h2>
+          <div class="chips hm-track" role="group" aria-label="Which half to stamp">
+            <button type="button" class="chip" data-hm-track="both" aria-pressed="true">Both</button>
+            <button type="button" class="chip" data-hm-track="work" aria-pressed="false">At work</button>
+            <button type="button" class="chip" data-hm-track="self" aria-pressed="false">Self</button>
+          </div>
+          <label class="field" style="margin:0">
+            <span class="sr-only">Year</span>
+            <select id="year">
+              {years.map((y) => <option value={y} selected={y === year}>{y}</option>)}
+            </select>
+          </label>
+        </div>
+        <div class="heatmap-wrap" id="heatmap" set:html={heatmapHtml(items, year, today, hrefFor)} />
+        <div class="legend" aria-hidden="true">
+          less <span class="cell" data-level="0"></span><span class="cell" data-level="1"></span><span class="cell" data-level="2"></span><span class="cell" data-level="3"></span><span class="cell" data-level="4"></span> more
+        </div>
+        <p class="muted small">Stamps get darker with hours (or entries, when hours aren't tracked). <span id="hm-track-note">Both halves are counted; switch to At work or Self to stamp one half only.</span> Each stamp links to that day's page.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="learn-h">
+        <h2 id="learn-h" class="panel-title">Currently learning <span class="muted small">(last 7 days)</span></h2>
+        <div id="learning" set:html={marqueeHtml(recentTags(items, today))} />
+      </section>
+
+      <div class="chart-grid">
+        <section class="chart-card" aria-labelledby="mb-h">
+          <h3 id="mb-h" data-stat-label="months">Entries per month, {year}</h3>
+          <div id="month-bars" set:html={monthBarsHtml(monthCounts(items, year), `Entries per month, ${year}`)} />
+        </section>
+        <section class="chart-card" aria-labelledby="wh-h">
+          <h3 id="wh-h">Hours per week, work vs self</h3>
+          <div id="week-hours" set:html={weeklyHoursHtml(items, today)} />
+        </section>
+        <section class="chart-card" aria-labelledby="tm-h">
+          <h3 id="tm-h">Topics per month</h3>
+          <div id="topic-months" set:html={topicsByMonthHtml(items, today)} />
+        </section>
+      </div>
+
+      <section class="panel" aria-labelledby="rc-h">
+        <h2 id="rc-h" class="panel-title">Monthly receipts</h2>
+        <div id="recaps" set:html={recapsHtml(monthlyRecaps(items, today))} />
+      </section>
+    </div>
+  </div>
+  <script type="application/json" id="log-data" set:html={json} />
+</Base>
+
+<script>
+  import { onPage } from '../../scripts/lifecycle';
+  import { refreshMotion } from '../../scripts/motion';
+  import { tallyHtml } from '../../lib/motifs';
+  import {
+    computeStats,
+    forTrack,
+    heatmapHtml,
+    marqueeHtml,
+    monthBarsHtml,
+    monthCounts,
+    monthlyRecaps,
+    prettyDay,
+    recapsHtml,
+    recentTags,
+    todayIn,
+    topicsByMonthHtml,
+    weeklyHoursHtml,
+    type LogItem,
+    type TrackFilter,
+  } from '../../lib/tracker';
+
+  onPage('tracker-root', (root) => {
+    const items = JSON.parse(document.getElementById('log-data')?.textContent ?? '[]') as LogItem[];
+    const today = todayIn(root.dataset.tz!);
+    const base = root.dataset.base!;
+    const hrefFor = (id: string) => `${base}${id}/`;
+    const q = <T extends HTMLElement = HTMLElement>(sel: string) => root.querySelector<T>(sel);
+    const setText = (sel: string, v: string) => {
+      const el = q(sel);
+      if (el) el.textContent = v;
+    };
+    const setHtml = (sel: string, v: string) => {
+      const el = q(sel);
+      if (el) el.innerHTML = v;
+    };
+
+    const s = computeStats(items, today);
+    setText('[data-stat="current"]', String(s.currentStreak));
+    setText('[data-stat-label="current"]', s.currentStreak === 1 ? 'day' : 'days');
+    setText('[data-stat="longest"]', `${s.longestStreak}d`);
+    setText('[data-stat="total"]', String(s.totalEntries));
+    setText('[data-stat="days"]', String(s.activeDays));
+    setText('[data-stat="hours"]', String(s.totalHours));
+    setText('[data-stat="work"]', `${s.workHours}h`);
+    setText('[data-stat="self"]', `${s.selfHours}h`);
+    setHtml('[data-stat="tally"]', tallyHtml(s.totalHours) || '<span class="side-none">no marks yet</span>');
+    setText(
+      '#today-note',
+      `${prettyDay(today)} · ${
+        s.loggedToday
+          ? 'Logged today. Nice.'
+          : s.currentStreak > 0
+            ? `Not logged yet today; log something to keep the ${s.currentStreak}-day streak.`
+            : 'Nothing logged today yet.'
+      }`,
+    );
+    setHtml('#learning', marqueeHtml(recentTags(items, today)));
+    setHtml('#week-hours', weeklyHoursHtml(items, today));
+    setHtml('#topic-months', topicsByMonthHtml(items, today));
+    setHtml('#recaps', recapsHtml(monthlyRecaps(items, today)));
+
+    const select = q<HTMLSelectElement>('#year');
+    const trackBtns = [...root.querySelectorAll<HTMLButtonElement>('[data-hm-track]')];
+    const WHAT: Record<TrackFilter, string> = { both: 'Daily log activity', work: 'Days with work logged', self: 'Days with self-improvement logged' };
+    const NOTE: Record<TrackFilter, string> = {
+      both: 'Both halves are counted; switch to At work or Self to stamp one half only.',
+      work: 'Showing the At work half only.',
+      self: 'Showing the Self-improvement half only.',
+    };
+    let track: TrackFilter = 'both';
+    const renderHeatmap = (year: number) => {
+      setHtml('#heatmap', heatmapHtml(forTrack(items, track), year, today, hrefFor, WHAT[track]));
+      setText('#hm-track-note', NOTE[track]);
+      trackBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.hmTrack === track)));
+    };
+    const renderYear = (year: number) => {
+      renderHeatmap(year);
+      setHtml('#month-bars', monthBarsHtml(monthCounts(items, year), `Entries per month, ${year}`));
+      setText('[data-stat-label="months"]', `Entries per month, ${year}`);
+      setText('[data-stat-label="year"]', `entries in ${year}`);
+      setText('[data-stat="year"]', String(items.filter((i) => i.date.startsWith(`${year}-`)).length));
+      refreshMotion(root);
+    };
+    renderYear(Number(select?.value ?? today.slice(0, 4)));
+    select?.addEventListener('change', () => renderYear(Number(select.value)));
+    trackBtns.forEach((b) =>
+      b.addEventListener('click', () => {
+        track = (b.dataset.hmTrack as TrackFilter) ?? 'both';
+        renderHeatmap(Number(select?.value ?? today.slice(0, 4)));
+        refreshMotion(root);
+      }),
+    );
+  });
+</script>

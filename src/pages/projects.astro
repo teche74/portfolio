@@ -1,0 +1,104 @@
+---
+/**
+ * Page 64: featured projects as lab specimen sheets (clipped, labelled, with the live
+ * language / stars / topics pencilled into the margin), what's on the bench right now, and
+ * the archive ledger of every public repository with search, filter and sort.
+ */
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import Icon from '../components/Icon.astro';
+import { FEATURED_AUTO_COUNT, FEATURED_REPOS, GITHUB_USERNAME, isSet } from '../config';
+import { BUILDING } from '../data/projects';
+import { projectCardHtml } from '../lib/project-cards';
+import { tiltOf } from '../lib/content';
+
+const gh = isSet(GITHUB_USERNAME) ? GITHUB_USERNAME : '';
+const featuredHtml = gh
+  ? FEATURED_REPOS.map((name, i) => projectCardHtml({ name, html_url: `https://github.com/${gh}/${name}` }, gh, i)).join('')
+  : '';
+const STICKY = ['s-yellow', 's-blue', 's-green', 's-pink', 's-orange'];
+---
+<Base title="Projects" description="Featured test-automation, data-engineering and ML projects, plus an archive of every public repository." active="projects" paper="graph">
+  <div id="projects-root" data-github={gh} data-featured={JSON.stringify(FEATURED_REPOS)} data-auto-count={FEATURED_AUTO_COUNT}>
+    <PageHead no={64} kicker="Projects · specimen sheets" title="Specimens" lede="The work worth pinning down: what it is, what it was built with, and where the code lives." />
+
+    <section aria-labelledby="feat-h">
+      <h2 id="feat-h" class="sr-only">Featured projects</h2>
+      {gh ? (
+        <ul class="specimens" id="featured-list" aria-busy={FEATURED_REPOS.length ? 'false' : 'true'} set:html={featuredHtml || '<li class="muted">Picking the specimens from GitHub…</li>'} />
+      ) : (
+        <p class="muted">Set <code>GITHUB_USERNAME</code> in <code>src/config.ts</code> to show projects.</p>
+      )}
+    </section>
+
+    {BUILDING.length > 0 && (
+      <section class="building" aria-labelledby="bench-h">
+        <div class="section-title"><h2 id="bench-h">On the bench</h2><span class="aside">in progress, no public repo yet</span></div>
+        <ul class="building-list">
+          {BUILDING.map((b, i) => (
+            <li class={`sticky ${STICKY[i % STICKY.length]}`} style={`--tilt:${tiltOf(b.name, 2)}deg`} data-reveal>
+              <span class="tape top-c" aria-hidden="true"></span>
+              <h3>{b.repo && gh ? <a href={`https://github.com/${gh}/${b.repo}`} target="_blank" rel="noopener noreferrer">{b.name}</a> : b.name}</h3>
+              <p>{b.summary}</p>
+              <p class="til-tags">{b.tags.map((t) => <span>{t}</span>)}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {gh && (
+      <section aria-labelledby="ledger-h" style="margin-top:2.8rem">
+        <div class="section-title"><h2 id="ledger-h">The archive ledger</h2><span class="aside">every public repository, live from GitHub</span></div>
+        <div class="repo-controls" role="search" aria-label="Filter repositories">
+          <label class="field grow">
+            <span class="field-ico" aria-hidden="true"><Icon name="search" /></span>
+            <span class="sr-only">Search repositories</span>
+            <input id="repo-q" type="search" placeholder="Search name, topic, language…" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="sr-only">Language</span>
+            <select id="repo-lang"><option value="">All languages</option></select>
+          </label>
+          <label class="field">
+            <span class="sr-only">Sort by</span>
+            <select id="repo-sort">
+              <option value="pushed">Recently updated</option>
+              <option value="created">Newest</option>
+              <option value="stars">Most stars</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </label>
+          <label class="check"><input id="repo-forks" type="checkbox" /> include forks</label>
+        </div>
+        <div class="table-wrap">
+          <table class="ledger repo-ledger">
+            <caption class="sr-only">Public repositories</caption>
+            <thead>
+              <tr>
+                <th scope="col">Repository</th>
+                <th scope="col">Language</th>
+                <th scope="col" class="num">★</th>
+                <th scope="col">Opened</th>
+                <th scope="col">Last entry</th>
+              </tr>
+            </thead>
+            <tbody id="repo-grid" aria-busy="true">
+              <tr><td colspan="5" class="led-empty">Fetching the ledger from GitHub…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted small" id="repo-status" aria-live="polite"></p>
+        <button type="button" class="btn" id="repo-more" hidden>Show more</button>
+      </section>
+    )}
+  </div>
+</Base>
+
+<script>
+  import { onPage } from '../scripts/lifecycle';
+  import { initProjects } from '../lib/projects-client';
+  onPage('projects-root', (root) => {
+    initProjects(root);
+  });
+</script>

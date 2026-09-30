@@ -1,0 +1,173 @@
+---
+/**
+ * The efforts ledger: an accountant's book of everything put in. Log entries, hours, books,
+ * pages, posts and TILs are counted at build time (and recounted in IST in the browser);
+ * the LeetCode and GitHub rows are fetched live, with the cached/snapshot fallbacks.
+ */
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import { GITHUB_USERNAME, LEETCODE_USERNAME, TIMEZONE, isSet } from '../../config';
+import { LEETCODE_FALLBACK } from '../../data/profiles';
+import { getDailyEntries, logItemOf } from '../../lib/daily';
+import { getPosts, getReading, getTils } from '../../lib/content';
+import { todayIn } from '../../lib/tracker';
+import { url } from '../../lib/url';
+
+const [daily, posts, reading, tils] = await Promise.all([getDailyEntries(), getPosts(), getReading(), getTils()]);
+const today = todayIn(TIMEZONE);
+const log = daily.map(logItemOf);
+
+type Dated = { date: string; n: number; sample?: boolean };
+const rows: { key: string; label: string; note: string; items: Dated[]; unit?: string }[] = [
+  { key: 'entries', label: 'Logbook entries', note: 'one line per session', items: daily.map((d) => ({ date: d.data.date, n: 1 })) },
+  { key: 'work', label: 'Hours at work', note: 'the "At work" half of each day', unit: 'h', items: log.map((d) => ({ date: d.date, n: d.work?.hours ?? 0 })) },
+  { key: 'self', label: 'Hours on self-improvement', note: 'the "Self-improvement" half', unit: 'h', items: log.map((d) => ({ date: d.date, n: d.self?.hours ?? 0 })) },
+  { key: 'hours', label: 'Hours, total', note: 'both halves together', unit: 'h', items: log.map((d) => ({ date: d.date, n: d.hours ?? 0 })) },
+  {
+    key: 'books',
+    label: 'Books finished',
+    note: 'from the shelf',
+    items: reading.filter((r) => r.data.type === 'book' && r.data.status === 'finished' && r.data.finished).map((r) => ({ date: r.data.finished!, n: 1, sample: r.data.sample })),
+  },
+  {
+    key: 'pages',
+    label: 'Pages read',
+    note: 'finished books, by finish date',
+    items: reading.filter((r) => r.data.type === 'book' && r.data.status === 'finished' && r.data.finished && r.data.pages).map((r) => ({ date: r.data.finished!, n: r.data.pages!, sample: r.data.sample })),
+  },
+  {
+    key: 'other',
+    label: 'Articles, papers, courses',
+    note: 'from the card drawer',
+    items: reading.filter((r) => r.data.type !== 'book' && r.data.status === 'finished' && r.data.finished).map((r) => ({ date: r.data.finished!, n: 1, sample: r.data.sample })),
+  },
+  { key: 'posts', label: 'Blog posts written', note: 'the manuscript index', items: posts.map((p) => ({ date: p.data.date, n: 1, sample: p.data.sample })) },
+  { key: 'tils', label: 'TIL notes pinned', note: 'the sticky wall', items: tils.map((t) => ({ date: t.data.date, n: 1, sample: t.data.sample })) },
+];
+const sum = (xs: Dated[], pred: (d: string) => boolean) => Math.round(xs.filter((x) => pred(x.date) && x.date <= today).reduce((s, x) => s + x.n, 0) * 10) / 10;
+const month = today.slice(0, 7);
+const year = today.slice(0, 4);
+const hasSamples = rows.some((r) => r.items.some((i) => i.sample));
+const json = JSON.stringify(rows.map((r) => ({ key: r.key, items: r.items.filter((i) => i.n) }))).replace(/</g, '\\u003c');
+const lc = isSet(LEETCODE_USERNAME) ? LEETCODE_USERNAME : '';
+const gh = isSet(GITHUB_USERNAME) ? GITHUB_USERNAME : '';
+---
+<Base title="Efforts ledger" description="A ledger of everything put in: practice hours, problems solved, books, posts and notes." active="practice" paper="graph">
+  <div id="efforts-root" class="efforts" data-tz={TIMEZONE} data-lc={lc} data-gh={gh}>
+    <PageHead no={26} kicker="Practice · efforts" title="Efforts ledger" lede="Debits only: every hour, problem, page and note that went in, by month, by year and in total." />
+    <p class="kicker" style="margin-left:0"><a href={url('/practice/')}>← the logbook</a> · <a href={url('/practice/tracker/')}>tracker</a></p>
+
+    <div class="table-wrap">
+      <table class="ledger">
+        <caption class="sr-only">Efforts by period</caption>
+        <thead>
+          <tr>
+            <th scope="col">Account</th>
+            <th scope="col" class="num" id="h-month">This month</th>
+            <th scope="col" class="num" id="h-year">{year}</th>
+            <th scope="col" class="num">All time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr data-row={r.key}>
+              <th scope="row">{r.label}<br /><span class="led-note">{r.note}</span></th>
+              <td class="num" data-p="month">{sum(r.items, (d) => d.startsWith(month))}{r.unit ?? ''}</td>
+              <td class="num" data-p="year">{sum(r.items, (d) => d.startsWith(year))}{r.unit ?? ''}</td>
+              <td class="num" data-p="all">{sum(r.items, () => true)}{r.unit ?? ''}</td>
+            </tr>
+          ))}
+          {lc && (
+            <tr data-row="lc">
+              <th scope="row">LeetCode problems solved<br /><span class="led-note" id="lc-note">snapshot, {LEETCODE_FALLBACK.asOf}; checking live…</span></th>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td class="num" id="lc-total">{LEETCODE_FALLBACK.solved}</td>
+            </tr>
+          )}
+          {gh && (
+            <tr data-row="gh">
+              <th scope="row">GitHub repos created<br /><span class="led-note" id="gh-note">public, non-fork; loading…</span></th>
+              <td class="num" id="gh-month">…</td>
+              <td class="num" id="gh-year">…</td>
+              <td class="num" id="gh-all">…</td>
+            </tr>
+          )}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="4" class="muted small">Only LeetCode's all-time total is available from the public APIs, so its month and year cells stay blank.</td></tr>
+        </tfoot>
+      </table>
+    </div>
+    {hasSamples && <p class="sample-note" role="note">↖ some of these counts include the sample entries (SHOW_SAMPLES in config.ts)</p>}
+  </div>
+  <script type="application/json" id="efforts-data" set:html={json} />
+</Base>
+
+<script>
+  import { onPage } from '../../scripts/lifecycle';
+  import { todayIn } from '../../lib/tracker';
+  import { ago, getGitHubData, getLeetCodeStats, publicRepos } from '../../lib/profiles-client';
+
+  onPage('efforts-root', (root) => {
+    const today = todayIn(root.dataset.tz!);
+    const month = today.slice(0, 7);
+    const year = today.slice(0, 4);
+    const data = JSON.parse(document.getElementById('efforts-data')?.textContent ?? '[]') as {
+      key: string;
+      items: { date: string; n: number }[];
+    }[];
+    const hYear = root.querySelector('#h-year');
+    if (hYear) hYear.textContent = year;
+    for (const r of data) {
+      const tr = root.querySelector(`[data-row="${r.key}"]`);
+      if (!tr) continue;
+      const unit = ['work', 'self', 'hours'].includes(r.key) ? 'h' : '';
+      const sum = (p: (d: string) => boolean) => Math.round(r.items.filter((i) => p(i.date) && i.date <= today).reduce((s, i) => s + i.n, 0) * 10) / 10;
+      const set = (p: string, v: number) => {
+        const td = tr.querySelector(`[data-p="${p}"]`);
+        if (td) td.textContent = `${v}${unit}`;
+      };
+      set('month', sum((d) => d.startsWith(month)));
+      set('year', sum((d) => d.startsWith(year)));
+      set('all', sum(() => true));
+    }
+
+    const lc = root.dataset.lc;
+    if (lc) {
+      getLeetCodeStats(lc, (s, m) => {
+        const t = root.querySelector('#lc-total');
+        const n = root.querySelector('#lc-note');
+        if (t) t.textContent = s.total.toLocaleString('en-IN');
+        if (n) n.textContent = m.error ? `${s.source}; live proxies unavailable` : `live, updated ${m.ts ? ago(m.ts) : 'just now'}`;
+      });
+    }
+
+    const gh = root.dataset.gh;
+    if (gh) {
+      getGitHubData(gh)
+        .then(({ data, stale }) => {
+          if (!data) throw new Error('no GitHub data');
+          const repos = publicRepos(data).filter((r) => !r.fork);
+          const count = (p: (d: string) => boolean) => repos.filter((r) => p(r.created_at.slice(0, 10))).length;
+          const set = (id: string, v: number) => {
+            const el = root.querySelector(id);
+            if (el) el.textContent = String(v);
+          };
+          set('#gh-month', count((d) => d.startsWith(month)));
+          set('#gh-year', count((d) => d.startsWith(year)));
+          set('#gh-all', repos.length);
+          const n = root.querySelector('#gh-note');
+          if (n) n.textContent = stale ? 'public, non-fork; cached copy (GitHub API unavailable)' : 'public, non-fork; live';
+        })
+        .catch(() => {
+          for (const id of ['#gh-month', '#gh-year', '#gh-all']) {
+            const el = root.querySelector(id);
+            if (el) el.textContent = '—';
+          }
+          const n = root.querySelector('#gh-note');
+          if (n) n.textContent = 'GitHub API unavailable right now';
+        });
+    }
+  });
+</script>

@@ -1,0 +1,148 @@
+[
+  {
+    "id": "work-globallogic-ase",
+    "type": "work",
+    "title": "Associate Software Engineer — QA automation",
+    "org": "GlobalLogic (Hitachi Group) · Noida",
+    "start": "2026-01",
+    "end": "present",
+    "description": "Manual and automated QA for a public-safety records-management platform: defect investigation, test design, PR and fix verification, and regression in Azure DevOps, plus TestComplete desktop automation with BDD.",
+    "tags": ["Manual testing", "Regression testing", "Test case design", "Azure DevOps", "TestComplete", "BDD"]
+  },
+  {
+    "id": "award-leetcode-knight",
+    "type": "award",
+    "title": "LeetCode Knight badge (Top 3.6%)",
+    "org": "LeetCode",
+    "start": "2026-05-06",
+    "description": "Reached the Knight contest tier, which puts me in the top 3.6% of contest participants worldwide.",
+    "link": "https://leetcode.com/u/ujjwalbisht55/",
+    "tags": ["Competitive programming"]
+  },
+  {
+    "id": "project-linkenite-hackathon",
+    "type": "project",
+    "title": "Linkenite hackathon: AI email-automation platform",
+    "org": "Hackathon · participant",
+    "start": "2025-09",
+    "description": "Built an email-automation platform that pulls in Gmail and Outlook mail, runs NER, sentiment and urgency classification, and drafts RAG-grounded replies in a Streamlit UI.",
+    "link": "https://github.com/teche74/EmailAutomationLinkeniteChallenge",
+    "tags": ["NLP", "Hugging Face", "spaCy", "Streamlit", "PostgreSQL"]
+  },
+  {
+    "id": "project-murf-challenge-4",
+    "type": "project",
+    "title": "Murf AI Coding Challenge 4: multilingual voice chat room",
+    "org": "Hackathon · participant",
+    "start": "2025-08",
+    "description": "A real-time group voice room with translation built in, so people who speak different languages can share one call.",
+    "link": "https://github.com/teche74/MURF-Coding-Challenge-4-Multilingual-Voice-Chat-Room",
+    "tags": ["Python", "Voice AI"]
+  },
+  {
+    "id": "edu-btech-gehu",
+    "type": "education",
+    "title": "B.Tech, Computer Science",
+    "org": "Graphic Era Hill University, Dehradun",
+    "start": "2021-07",
+    "end": "2025-07",
+    "description": "GPA 8.2/10. Coursework included data structures and algorithms, DBMS, machine learning and distributed systems.",
+    "tags": ["Data structures & algorithms", "DBMS", "Machine learning", "Distributed systems"]
+  },
+  {
+    "id": "award-leetcode-500-days",
+    "type": "award",
+    "title": "LeetCode 500 Days badge",
+    "org": "LeetCode",
+    "start": "2025-01-10",
+    "description": "500 days of solving problems on LeetCode.",
+    "tags": ["Consistency"]
+  },
+  {
+    "id": "award-leetcode-peak-rating",
+    "type": "award",
+    "title": "Peak LeetCode contest rating: 2016.7",
+    "org": "LeetCode · Weekly Contest 427",
+    "start": "2024-12-07",
+    "description": "My highest contest rating so far.",
+    "tags": ["Competitive programming"]
+  },
+  {
+    "id": "award-leetcode-365-days",
+    "type": "award",
+    "title": "LeetCode 365 Days badge",
+    "org": "LeetCode",
+    "start": "2024-12-02",
+    "description": "A full year of daily problem solving.",
+    "tags": ["Consistency"]
+  },
+  {
+    "id": "cert-datastax-ds201",
+    "type": "certification",
+    "title": "DS201: Foundations of Apache Cassandra",
+    "org": "DataStax Academy",
+    "start": "2024-11-04",
+    "credential": "https://datastax.academy/badges/badge.php?hash=18f696dc52961309884f773f4ad098c43dfcd06b",
+    "tags": ["Cassandra", "Data modelling"]
+  },
+  {
+    "id": "cert-hackerrank-sql-intermediate",
+    "type": "certification",
+    "title": "SQL (Intermediate)",
+    "org": "HackerRank",
+    "start": "2024-11-02",
+    "tags": ["SQL"]
+  },
+  {
+    "id": "award-leetcode-best-rank",
+    "type": "award",
+    "title": "Best LeetCode contest rank: 595",
+    "org": "LeetCode · Weekly Contest 421",
+    "start": "2024-10-26",
+    "description": "My best global finish in a weekly contest.",
+    "tags": ["Competitive programming"]
+  },
+  {
+    "id": "award-amazon-ml-summer-school-2024",
+    "type": "award",
+    "title": "Selected: Amazon ML Summer School 2024",
+    "org": "Amazon",
+    "start": "2024-07",
+    "description": "Selected for Amazon's machine-learning summer school.",
+    "tags": ["Machine learning"]
+  },
+  {
+    "id": "cert-hackerrank-software-engineer-intern",
+    "type": "certification",
+    "title": "Software Engineer Intern",
+    "org": "HackerRank",
+    "start": "2024-01-31",
+    "tags": ["Problem solving", "SQL"]
+  },
+  {
+    "id": "cert-hackerrank-sql-basic",
+    "type": "certification",
+    "title": "SQL (Basic)",
+    "org": "HackerRank",
+    "start": "2024-01-31",
+    "tags": ["SQL"]
+  },
+  {
+    "id": "award-leetcode-first-contest",
+    "type": "award",
+    "title": "First LeetCode contest",
+    "org": "LeetCode · Weekly Contest 374",
+    "start": "2023-12-03",
+    "description": "The first of 39 rated contests (so far).",
+    "tags": ["Competitive programming"]
+  },
+  {
+    "id": "cert-worldquant-ads-lab",
+    "type": "certification",
+    "title": "Applied Data Science Lab",
+    "org": "WorldQuant University",
+    "start": "2023-07-27",
+    "credential": "https://www.credly.com/badges/5a8836c4-73d0-4eb5-827c-65efadba14b4/public_url",
+    "tags": ["Data science", "Python", "Machine learning"]
+  }
+]

@@ -1,0 +1,10 @@
+---
+/**
+ * Inline SVG icon set (filled, 24×24). Brand icons plus a small generic set.
+ * Use the exported ICON_PATHS in client scripts that need the same shapes.
+ */
+import { ICON_PATHS, type IconName } from '../lib/icons';
+interface Props { name: IconName; class?: string }
+const { name, class: cls } = Astro.props;
+---
+<svg class={cls} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d={ICON_PATHS[name]} /></svg>

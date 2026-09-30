@@ -1,0 +1,136 @@
+---
+/**
+ * Page 80: the report card. LeetCode and GitHub are fetched live (cached for an hour, with
+ * stale-cache and snapshot fallbacks); HackerRank and GeeksforGeeks are hand-kept rows;
+ * LeetCode badges are sewn on as patches; a hand-graded mark sits in the corner.
+ */
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import { GITHUB_USERNAME, LEETCODE_USERNAME, LINKS, isSet } from '../config';
+import { LEETCODE_FALLBACK, PROFILES } from '../data/profiles';
+import { lcRingHtml, lcMetersHtml, statTile } from '../lib/stat-views';
+
+const gh = isSet(GITHUB_USERNAME) ? GITHUB_USERNAME : '';
+const lc = isSet(LEETCODE_USERNAME) ? LEETCODE_USERNAME : '';
+const visible = PROFILES.filter((p) => !p.href.includes('TODO'));
+const manual = visible.filter((p) => !p.live && !p.compact);
+const compact = visible.filter((p) => p.compact);
+const ghProfile = visible.find((p) => p.id === 'github');
+const F = LEETCODE_FALLBACK;
+const links = LINKS.filter((l) => isSet(l.href));
+---
+<Base title="Stats" description="Coding profiles as a report card: LeetCode, GitHub, HackerRank and GeeksforGeeks." active="stats" paper="plain">
+  <div id="stats-root" data-gh={gh} data-lc={lc}>
+    <PageHead no={80} kicker="Stats · report card" title="Report card" lede="Marks from the places I practise. The LeetCode and GitHub rows are fetched live when you open this page." />
+
+    {lc && (
+      <section class="report-card" aria-labelledby="lc-h" data-reveal>
+        <span class="grade" aria-hidden="true">Knight!</span>
+        <div class="rc-head">
+          <h2 id="lc-h">LeetCode <span class="muted small">· {lc}</span></h2>
+          <span class="muted" id="lc-updated">snapshot {F.asOf}</span>
+        </div>
+        <div id="lc-body">
+          <div class="lc-grid">
+            <div class="chart-card" set:html={lcRingHtml({ total: F.solved, easy: F.easy, medium: F.medium, hard: F.hard })} />
+            <div>
+              <dl class="scores" set:html={[statTile(F.easy, 'easy'), statTile(F.medium, 'medium'), statTile(F.hard, 'hard')].join('')} />
+              <p class="muted src-note">Loading live counts…</p>
+            </div>
+          </div>
+          <div class="two-col">
+            <div><h4>Languages</h4><Fragment set:html={lcMetersHtml(F.languages, 'Problems solved per language')} /></div>
+            <div><h4>Top topics</h4><Fragment set:html={lcMetersHtml(F.topTags, 'Problems solved per topic tag')} /></div>
+          </div>
+        </div>
+        <p><a href={`https://leetcode.com/u/${lc}/`} target="_blank" rel="noopener noreferrer">Open the LeetCode profile ↗<span class="sr-only"> (opens in new tab)</span></a></p>
+      </section>
+    )}
+
+    {lc && (
+      <section class="report-card" id="contest-card" aria-labelledby="ct-h" data-reveal>
+        <div class="rc-head"><h2 id="ct-h">Contest rating</h2><span class="muted" id="contest-updated"></span></div>
+        <div data-body>
+          <dl class="scores" set:html={[statTile(F.rating, 'current rating'), statTile(F.peakRating, 'peak rating', { decimals: 1 }), statTile(F.contests, 'contests'), statTile(`top ${F.topPercent}%`, 'of all rated users'), statTile(F.bestRank, 'best rank'), statTile(F.badge, 'contest badge')].join('')} />
+          <p class="muted small">Snapshot from {F.asOf}; the rating history loads live.</p>
+        </div>
+      </section>
+    )}
+
+    {lc && (
+      <section class="report-card" id="badges-card" aria-labelledby="bd-h" data-reveal>
+        <div class="rc-head"><h2 id="bd-h">Badges, sewn on</h2><span class="muted" id="badges-count">{F.badgesCount} badges</span></div>
+        <div data-body><p class="muted">Loading the patches…</p></div>
+      </section>
+    )}
+
+    {gh && (
+      <section class="report-card" aria-labelledby="gh-h" data-reveal>
+        <div class="rc-head">
+          <h2 id="gh-h">GitHub <span class="muted small">· {gh}</span></h2>
+          <span class="muted" id="gh-updated"></span>
+        </div>
+        <div id="gh-body">
+          <dl class="scores" set:html={(ghProfile?.stats ?? []).map((s) => statTile(s.value, s.label)).join('')} />
+          <p class="muted">Loading repositories…</p>
+        </div>
+        <figure class="gh-graph">
+          <img src={`https://ghchart.rshah.org/2a3a8f/${gh}`} alt={`GitHub contribution graph for ${gh}`} loading="lazy" decoding="async" width="720" height="112" onerror="this.parentElement.hidden=true" />
+          <figcaption>contributions, last 12 months (via ghchart.rshah.org)</figcaption>
+        </figure>
+      </section>
+    )}
+
+    <section class="report-card" aria-labelledby="other-h" data-reveal>
+      <div class="rc-head"><h2 id="other-h">Other subjects</h2><span class="muted">kept by hand</span></div>
+      <div class="profile-rows">
+        {manual.map((p) => (
+          <div class="profile-row">
+            <h3><a href={p.href} target="_blank" rel="noopener noreferrer">{p.name}<span class="sr-only"> (opens in new tab)</span></a></h3>
+            <p class="pf-handle muted">@{p.handle}</p>
+            {p.blurb && <p class="small" style="margin:0">{p.blurb}</p>}
+            {p.stats && p.stats.length > 0 && (
+              <dl class="pf-stats">
+                {p.stats.map((s) => <div><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
+              </dl>
+            )}
+            {p.badges && p.badges.length > 0 && (
+              <ul class="patches" aria-label={`${p.name} badges`}>
+                {p.badges.map((b) => {
+                  const [lang, stars] = b.split(/\s+(?=★)/);
+                  return <li class="patch hr-patch"><span class="ph-big">{lang}</span><span aria-label={stars ? `${stars.length} stars` : undefined}>{stars}</span></li>;
+                })}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+      {(compact.length > 0 || links.length > 0) && (
+        <>
+          <h3 style="margin-top:1.6rem;font-size:1.05rem">Also enrolled at</h3>
+          <ul class="elsewhere">
+            {compact.map((p) => <li><a href={p.href} target="_blank" rel="noopener noreferrer">{p.name} · {p.handle}<span class="sr-only"> (opens in new tab)</span></a></li>)}
+            {links.map((l) => <li><a href={l.href} target="_blank" rel="noopener noreferrer">{l.label}<span class="sr-only"> (opens in new tab)</span></a></li>)}
+          </ul>
+        </>
+      )}
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { onPage } from '../scripts/lifecycle';
+  import { loadBadges, loadContest, loadGitHub, loadLeetCode } from '../lib/profiles-client';
+
+  onPage('stats-root', (root) => {
+    const { gh, lc } = root.dataset;
+    if (lc) {
+      loadLeetCode(lc);
+      const contest = document.getElementById('contest-card');
+      if (contest) loadContest(lc, contest);
+      const badges = document.getElementById('badges-card');
+      if (badges) loadBadges(lc, badges);
+    }
+    if (gh) loadGitHub(gh);
+  });
+</script>

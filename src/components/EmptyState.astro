@@ -1,0 +1,17 @@
+---
+/** A designed "nothing here yet" page: a pencil doodle, a title and how to add the first one. */
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+<div class="empty-state">
+  <svg class="empty-doodle" viewBox="0 0 80 64" aria-hidden="true" focusable="false">
+    <path d="M10 50 L38 8 L44 12 L16 54 Z" />
+    <path d="M10 50 l-2 8 8-4" />
+    <path d="M40 58 c10-3 18-2 30-4" />
+    <path d="M52 28 c4-1 8 0 12-2 M50 38 c6 0 10-1 16-3" />
+  </svg>
+  <p class="empty-t">{title}</p>
+  <p class="empty-b"><slot /></p>
+</div>

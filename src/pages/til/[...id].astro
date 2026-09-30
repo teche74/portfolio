@@ -1,0 +1,39 @@
+---
+/** One TIL note, full size, with its permalink. */
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import SampleNote from '../../components/SampleNote.astro';
+import { getTils, hashStr, type Til } from '../../lib/content';
+import { formatDay, slugTag } from '../../lib/daily';
+import { url } from '../../lib/url';
+
+export async function getStaticPaths() {
+  const tils = await getTils();
+  return tils.map((til, i) => ({ params: { id: til.id }, props: { til, newer: tils[i - 1], older: tils[i + 1] } }));
+}
+interface Props {
+  til: Til;
+  newer?: Til;
+  older?: Til;
+}
+const { til, newer, older } = Astro.props;
+const { Content } = await render(til);
+const COLORS = ['s-yellow', 's-pink', 's-blue', 's-green', 's-orange'];
+---
+<Base title={`TIL: ${til.data.title}`} description={`Today I learned: ${til.data.title}`} active="til" paper="cork">
+  <p class="kicker" style="margin-left:0"><a href={url('/til/')}>← the whole board</a></p>
+  <article class={`sticky til-single ${COLORS[hashStr(til.id) % COLORS.length]}`} style="--tilt:-0.8deg" aria-labelledby="til-title">
+    <span class="tape top-c" aria-hidden="true"></span>
+    <p class="til-date"><time datetime={til.data.date}>{formatDay(til.data.date)}</time></p>
+    <h1 id="til-title">{til.data.title}</h1>
+    <div class="prose"><Content /></div>
+    {til.data.tags.length > 0 && (
+      <p class="til-tags">{til.data.tags.map((t) => <a href={url(`/til/?tag=${slugTag(t)}`)}><span>{t}</span></a>)}</p>
+    )}
+    {til.data.sample && <SampleNote />}
+  </article>
+  <nav class="log-nav" aria-label="More notes" style="max-width:34rem;margin-inline:auto">
+    {older ? <a class="btn" href={url(`/til/${older.id}/`)} rel="prev">← {older.data.title}</a> : <span></span>}
+    {newer ? <a class="btn" href={url(`/til/${newer.id}/`)} rel="next">{newer.data.title} →</a> : <span></span>}
+  </nav>
+</Base>

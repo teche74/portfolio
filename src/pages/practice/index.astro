@@ -1,0 +1,183 @@
+---
+/**
+ * Page 15: the practice logbook. One ruled line per day with the date in the red margin and
+ * a two-column spread underneath: "At work" on the left, "Self-improvement" on the right,
+ * each with its own tally marks, highlighter tags and a line of notes. Filters: ?tag= and
+ * ?track=work|self (the Both / At work / Self toggle).
+ */
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import { TIMEZONE } from '../../config';
+import { getDailyEntries, formatDay, allTags, slugTag, partsOf, logItemOf } from '../../lib/daily';
+import { excerpt, TRACKS, TRACK_LABEL } from '../../lib/daily-parts';
+import { computeStats, todayIn } from '../../lib/tracker';
+import { moodHtml, tallyHtml } from '../../lib/motifs';
+import { url } from '../../lib/url';
+
+const entries = await getDailyEntries();
+const tags = allTags(entries);
+const stats = computeStats(entries.map(logItemOf), todayIn(TIMEZONE));
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const HL = ['var(--hl-yellow)', 'var(--hl-green)', 'var(--hl-pink)'];
+const TRACK_BTNS = [
+  { v: 'both', l: 'Both' },
+  { v: 'work', l: 'At work' },
+  { v: 'self', l: 'Self' },
+];
+---
+<Base title="Practice log" description="A daily logbook in two halves: work, and self-improvement. Hours, topics and notes for each." active="practice" paper="ruled">
+  <div id="daily-root">
+    <PageHead no={15} kicker="Practice · daily logbook" title="The logbook" lede="One line a day, in two halves: what I did at work, and what I practised for myself." />
+
+    <div class="log-tools">
+      <div class="btn-row">
+        <a class="btn" href={url('/practice/tracker/')}>Tracker &amp; heatmap</a>
+        <a class="btn ghost" href={url('/practice/efforts/')}>Efforts ledger</a>
+      </div>
+      <span class="stamp" style="--rot:6deg"><span>{stats.totalEntries} {stats.totalEntries === 1 ? 'entry' : 'entries'}</span><strong>{stats.totalHours}h</strong><span>logged</span></span>
+    </div>
+
+    {entries.length > 0 && (
+      <div class="log-tools log-filters">
+        <div class="chips" role="group" aria-label="Show which half">
+          {TRACK_BTNS.map((b) => (
+            <button type="button" class="chip" data-track={b.v} aria-pressed={b.v === 'both' ? 'true' : 'false'}>{b.l}</button>
+          ))}
+        </div>
+        {tags.length > 0 && (
+          <div class="chips" role="group" aria-label="Filter entries by tag">
+            <button type="button" class="chip" data-tag="" aria-pressed="true">all</button>
+            {tags.map(([t, n]) => (
+              <button type="button" class="chip" data-tag={slugTag(t)} aria-pressed="false">#{t} <span class="cnt">{n}</span></button>
+            ))}
+          </div>
+        )}
+        <p class="muted small" id="filter-status" aria-live="polite" style="margin:0"></p>
+      </div>
+    )}
+
+    {entries.length === 0 ? (
+      <EmptyState title="The logbook is blank">First entry coming soon. Write it with <code>npm run new-entry</code>, or from the Daily tab in /admin.</EmptyState>
+    ) : (
+      <ol class="logbook" id="entries" data-track="both" reversed>
+        {entries.map((e, i) => {
+          const d = e.data;
+          const p = partsOf(e);
+          const [, m, dd] = d.date.split('-');
+          return (
+            <li
+              class="log-line"
+              data-has={TRACKS.filter((t) => p[t]).join(' ')}
+              data-tags-work={(p.work?.tags ?? []).map(slugTag).join(' ')}
+              data-tags-self={(p.self?.tags ?? []).map(slugTag).join(' ')}
+              data-reveal
+              style={`--i:${Math.min(i, 8)}`}
+            >
+              <time class="log-date" datetime={d.date}>
+                <span aria-hidden="true">{Number(dd)} {MON[Number(m) - 1]}</span>
+                <small aria-hidden="true">{d.date.slice(0, 4)}</small>
+                <span class="sr-only">{formatDay(d.date)}</span>
+              </time>
+              <div class="log-top">
+                <h2 class="log-title"><a href={url(`/practice/${e.id}/`)}>{d.title}</a></h2>
+                <Fragment set:html={moodHtml(d.mood)} />
+              </div>
+              <div class="log-spread">
+                {TRACKS.map((t) => {
+                  const part = p[t];
+                  const topics = part ? [...part.tags, ...part.topics.filter((x) => !part.tags.includes(x))] : [];
+                  const note = part ? excerpt(part.html) : '';
+                  return (
+                    <div class={`log-side side-${t}`} data-side={t}>
+                      <p class="side-k">{TRACK_LABEL[t]}</p>
+                      {part ? (
+                        <>
+                          {(!!part.hours || topics.length > 0) && (
+                            <p class="log-meta">
+                              <Fragment set:html={tallyHtml(part.hours)} />
+                              {topics.length > 0 && (
+                                <span class="hl-tags" role="list">
+                                  {topics.map((x, j) => <span role="listitem" class="hl-tag" style={`--hl:${HL[j % 3]}`}>{x}</span>)}
+                                </span>
+                              )}
+                            </p>
+                          )}
+                          {note && <p class="side-note">{note}</p>}
+                        </>
+                      ) : (
+                        <p class="side-none">— nothing logged —</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    )}
+  </div>
+</Base>
+
+<script>
+  import { onPage } from '../../scripts/lifecycle';
+
+  type TrackSel = 'both' | 'work' | 'self';
+
+  onPage('daily-root', (root) => {
+    const tagBtns = [...root.querySelectorAll<HTMLButtonElement>('[data-tag]')];
+    const trackBtns = [...root.querySelectorAll<HTMLButtonElement>('button[data-track]')];
+    const list = root.querySelector<HTMLElement>('#entries');
+    const items = [...root.querySelectorAll<HTMLElement>('#entries > li')];
+    const status = root.querySelector('#filter-status');
+    const words = (s?: string) => (s ?? '').split(' ').filter(Boolean);
+    const state: { tag: string; track: TrackSel } = { tag: '', track: 'both' };
+    const TRACK_NAME: Record<TrackSel, string> = { both: '', work: 'at work', self: 'in self-improvement' };
+
+    function apply() {
+      const { tag, track } = state;
+      let shown = 0;
+      for (const li of items) {
+        const has = words(li.dataset.has);
+        const sides = track === 'both' ? has : has.filter((t) => t === track);
+        const tagged = !tag || sides.some((t) => words(t === 'work' ? li.dataset.tagsWork : li.dataset.tagsSelf).includes(tag));
+        const match = (track === 'both' || has.includes(track)) && tagged;
+        li.hidden = !match;
+        if (match) shown++;
+      }
+      if (list) list.dataset.track = track;
+      tagBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tag === tag)));
+      trackBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.track === track)));
+      if (status) {
+        const bits = [track !== 'both' ? TRACK_NAME[track] : '', tag ? `tagged #${tag}` : ''].filter(Boolean);
+        status.textContent = bits.length ? `${shown} ${shown === 1 ? 'entry' : 'entries'} ${bits.join(', ')}` : '';
+      }
+      const u = new URL(location.href);
+      if (tag) u.searchParams.set('tag', tag);
+      else u.searchParams.delete('tag');
+      if (track !== 'both') u.searchParams.set('track', track);
+      else u.searchParams.delete('track');
+      history.replaceState(history.state, '', u);
+    }
+
+    tagBtns.forEach((b) =>
+      b.addEventListener('click', () => {
+        state.tag = b.dataset.tag ?? '';
+        apply();
+      }),
+    );
+    trackBtns.forEach((b) =>
+      b.addEventListener('click', () => {
+        state.track = (b.dataset.track as TrackSel) ?? 'both';
+        apply();
+      }),
+    );
+    const params = new URL(location.href).searchParams;
+    const t0 = params.get('tag');
+    const k0 = params.get('track');
+    if (t0 && tagBtns.some((b) => b.dataset.tag === t0)) state.tag = t0;
+    if (k0 === 'work' || k0 === 'self') state.track = k0;
+    if (state.tag || state.track !== 'both') apply();
+  });
+</script>

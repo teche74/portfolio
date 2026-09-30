@@ -1,0 +1,87 @@
+---
+/**
+ * One manuscript: a drop cap, footnotes turned into margin notes by rehype-sidenotes,
+ * reading time, tags, and previous/next links. Below 1100px a note opens under its line
+ * when its number is tapped.
+ */
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import SampleNote from '../../components/SampleNote.astro';
+import { getPosts, readingMinutes, type Post } from '../../lib/content';
+import { formatDay, slugTag } from '../../lib/daily';
+import { SITE } from '../../config';
+import { url } from '../../lib/url';
+
+export async function getStaticPaths() {
+  const posts = await getPosts(); // newest first
+  return posts.map((post, i) => ({ params: { slug: post.id }, props: { post, newer: posts[i - 1], older: posts[i + 1] } }));
+}
+interface Props {
+  post: Post;
+  newer?: Post;
+  older?: Post;
+}
+const { post, newer, older } = Astro.props;
+const { Content } = await render(post);
+const d = post.data;
+const mins = readingMinutes(post.body);
+---
+<Base title={d.title} description={d.summary || `${d.title}, an essay by ${SITE.name}`} active="blog" paper="plain" rss>
+  <p class="kicker" style="margin-left:0"><a href={url('/blog/')}>← all manuscripts</a></p>
+  <article class="manuscript" id="post-root" aria-labelledby="post-title">
+    <header class="ms-head">
+      <h1 id="post-title" class="page-title">{d.title}</h1>
+      {d.summary && <p class="lede">{d.summary}</p>}
+      <p class="ms-meta">
+        <time datetime={d.date}>{formatDay(d.date)}</time>
+        <span>{mins} min read</span>
+        <span>by {SITE.name}</span>
+      </p>
+      {d.sample && <SampleNote />}
+    </header>
+    <div class="prose dropcap">
+      <Content />
+    </div>
+    <footer class="post-foot">
+      {d.tags.length > 0 && (
+        <p class="hl-tags" aria-label="Tags">
+          {d.tags.map((t, i) => <span class="hl-tag" id={`tag-${slugTag(t)}`} style={`--hl:var(--hl-${['yellow', 'green', 'pink'][i % 3]})`}>#{t}</span>)}
+        </p>
+      )}
+      <nav class="post-nav" aria-label="More manuscripts">
+        {older ? (
+          <a href={url(`/blog/${older.id}/`)} rel="prev"><span class="pn-k">← older</span>{older.data.title}</a>
+        ) : <span></span>}
+        {newer ? (
+          <a class="next" href={url(`/blog/${newer.id}/`)} rel="next"><span class="pn-k">newer →</span>{newer.data.title}</a>
+        ) : <span></span>}
+      </nav>
+    </footer>
+  </article>
+</Base>
+
+<script>
+  import { onPage } from '../../scripts/lifecycle';
+
+  // Narrow screens: a footnote number toggles its margin note open under the line.
+  onPage('post-root', (root) => {
+    const wide = window.matchMedia('(min-width: 1100px)');
+    root.querySelectorAll<HTMLElement>('sup.fn-ref').forEach((sup) => {
+      const a = sup.querySelector<HTMLAnchorElement>('a');
+      const note = sup.dataset.sn ? document.getElementById(sup.dataset.sn) : null;
+      if (!a || !note) return;
+      a.setAttribute('aria-controls', note.id);
+      a.setAttribute('aria-expanded', 'false');
+      a.addEventListener('click', (ev) => {
+        if (wide.matches) {
+          ev.preventDefault();
+          note.animate?.([{ backgroundColor: 'var(--hl-yellow)' }, { backgroundColor: 'transparent' }], { duration: 900 });
+          return;
+        }
+        ev.preventDefault();
+        const open = note.classList.toggle('open');
+        a.setAttribute('aria-expanded', String(open));
+      });
+    });
+  });
+</script>

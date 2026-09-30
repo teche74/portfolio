@@ -1,0 +1,40 @@
+---
+/** Page 31: the manuscript index. A numbered contents list of every essay. */
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import SampleNote from '../../components/SampleNote.astro';
+import { getPosts, readingMinutes } from '../../lib/content';
+import { formatDay, slugTag } from '../../lib/daily';
+import { url } from '../../lib/url';
+
+const posts = await getPosts();
+const total = posts.length;
+---
+<Base title="Blog" description="Essays on testing, algorithms and data engineering, with margin notes." active="blog" paper="plain" rss>
+  <PageHead no={31} kicker="Blog · manuscripts" title="Manuscripts" lede="Longer pieces, written slowly. Notes live in the margin." />
+  <p class="muted small" style="margin-top:-0.6rem"><a href={url('/rss.xml')}>Subscribe by RSS</a></p>
+
+  {total === 0 ? (
+    <EmptyState title="The first essay is being drafted">Nothing published yet. Start one with <code>npm run new:post -- "A title"</code> or the Blog tab in /admin.</EmptyState>
+  ) : (
+    <ol class="press-index" data-stagger>
+      {posts.map((p, i) => (
+        <li class="press-item" data-reveal>
+          <span class="press-no" aria-hidden="true">{String(total - i).padStart(2, '0')}</span>
+          <div>
+            <h2><a href={url(`/blog/${p.id}/`)}>{p.data.title}</a></h2>
+            {p.data.summary && <p class="press-sum">{p.data.summary}</p>}
+            <p class="press-meta">
+              <time datetime={p.data.date}>{formatDay(p.data.date)}</time>
+              <span>{readingMinutes(p.body)} min read</span>
+              {p.data.tags.map((t) => <span id={`t-${slugTag(t)}`}>#{t}</span>)}
+            </p>
+            {p.data.sample && <SampleNote />}
+          </div>
+          <span class="press-side" aria-hidden="true">MS-{String(total - i).padStart(3, '0')}</span>
+        </li>
+      ))}
+    </ol>
+  )}
+</Base>

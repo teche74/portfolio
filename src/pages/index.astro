@@ -1,0 +1,176 @@
+---
+/**
+ * Page 1: the cloth cover and the Contents page. The side notes on the desk: a "Today"
+ * sticky (recomputed in the browser in IST), the streak stamp, what is being read right now
+ * and the latest writing.
+ */
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import SampleNote from '../components/SampleNote.astro';
+import { COVER_LINE, SITE, SOCIALS, TIMEZONE, isSet } from '../config';
+import { NAV } from '../lib/nav';
+import { url } from '../lib/url';
+import { getDailyEntries, formatDay, logItemOf } from '../lib/daily';
+import { splitHoursText } from '../lib/daily-parts';
+import { getPosts, getReading, getTils, spineOf } from '../lib/content';
+import { computeStats, todayIn } from '../lib/tracker';
+
+const hasResume = isSet(SITE.resume) && !!SITE.resume;
+const nav = NAV.filter((n) => n.id !== 'home' && (n.id !== 'resume' || hasResume));
+const daily = await getDailyEntries();
+const [posts, reading, tils] = await Promise.all([getPosts(), getReading(), getTils()]);
+const log = daily.map(logItemOf);
+const today = todayIn(TIMEZONE);
+const stats = computeStats(log, today);
+const current = reading.find((r) => r.data.status === 'reading');
+const spine = current ? spineOf(current.data.title, current.data.pages) : null;
+const latestPost = posts[0];
+const latestTil = tils[0];
+const lastLog = log[0];
+const lastSplit = lastLog ? splitHoursText(lastLog.work?.hours, lastLog.self?.hours) : '';
+const socials = SOCIALS.filter((s) => isSet(s.href) && s.icon !== 'mail');
+const logJson = JSON.stringify(log.map(({ id, date, title }) => ({ id, date, title, tags: [] }))).replace(/</g, '\\u003c');
+const year = today.slice(0, 4);
+---
+<Base active="home" section="Contents">
+  <div class="spread" id="home" data-tz={TIMEZONE}>
+    <div class="cover" role="img" aria-label={`A green cloth-bound notebook labelled Field Notebook, Vol. ${year}, property of ${SITE.name}`}>
+      <div class="cover-label">
+        <p class="cl-top">Field Notebook</p>
+        <p class="cl-vol">Vol. {year}</p>
+        <h1 class="cl-owner"><span class="cl-prop">Property of</span>{SITE.name}</h1>
+        <p class="cl-role">{SITE.role} · {SITE.location}</p>
+      </div>
+      <p class="cover-hand" aria-hidden="true">{COVER_LINE}</p>
+    </div>
+
+    <section class="contents" id="contents" aria-labelledby="contents-title">
+      <div class="contents-title">
+        <h2 id="contents-title">Contents</h2>
+        <span class="margin-hand" aria-hidden="true">start anywhere</span>
+      </div>
+      <p class="lede">
+        {SITE.name} is {/^[aeiou]/i.test(SITE.role) ? "an" : "a"} {SITE.role.toLowerCase()} at {SITE.employer}, doing QA automation in {SITE.location}. This notebook keeps the work, the practice and the reading in one place.
+      </p>
+      <ol class="toc" data-stagger>
+        {nav.map((n) => (
+          <li data-reveal>
+            <a href={url(n.href)}>
+              <span class="toc-t">{n.label}</span>
+              <span class="toc-b">{n.blurb}</span>
+              <span class="toc-dots" aria-hidden="true"></span>
+              <span class="toc-p"><span class="sr-only">page </span>{n.page}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+      <div class="btn-row" style="margin-top:1.4rem">
+        {hasResume && <a class="btn primary" href={url('/resume/')}><Icon name="file" /> Resume</a>}
+        <a class="btn" href={url('/about/')}>Passport &amp; contact</a>
+        <button type="button" class="btn ghost" data-palette-open><Icon name="search" /> Search everything</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="home-desk">
+    <aside class="sticky s-yellow today-note lift" style="--tilt:-2deg" aria-labelledby="today-h" data-reveal>
+      <span class="tape top-c" aria-hidden="true"></span>
+      <h2 id="today-h">Today</h2>
+      <span class="t-date" id="today-date">{formatDay(today)}</span>
+      <p id="today-line">
+        {!log.length ? 'The logbook is still blank. First entry coming soon.' : stats.loggedToday ? 'Logged today. The streak is safe.' : stats.currentStreak > 0 ? `Nothing logged yet today; the streak is ${stats.currentStreak} days.` : 'Nothing logged yet today.'}
+      </p>
+      {lastLog && (
+        <p class="muted">
+          Last entry: <a href={url(`/practice/${lastLog.id}/`)}>{lastLog.title}</a>
+          {lastSplit && <span class="t-split">{lastSplit}</span>}
+        </p>
+      )}
+    </aside>
+
+    <div class="streak-card" data-reveal>
+      <span class="stamp round" style="--rot:-9deg" id="streak-stamp">
+        <span>streak</span><strong id="streak-n">{stats.currentStreak}</strong><span>{stats.currentStreak === 1 ? 'day' : 'days'}</span>
+      </span>
+      <p class="muted small" style="text-align:center;margin:0">
+        {log.length ? <>longest <span id="streak-long">{stats.longestStreak}</span></> : 'no entries yet'} · <a href={url('/practice/tracker/')}>the tracker</a>
+      </p>
+    </div>
+
+    {current && spine ? (
+      <a class="reading-card" href={url(`/reading/#${current.id}`)} data-reveal>
+        <p class="rc-kicker">Currently reading</p>
+        <span class={`mini-spine sp-c${spine.color}`} aria-hidden="true"></span>
+        <div>
+          <h2>{current.data.title}</h2>
+          <span class="muted">{current.data.author}</span>
+          {current.data.progress !== undefined && (
+            <>
+              <span class="ribbon-bar" aria-hidden="true"><span style={`--p:${current.data.progress}%`}></span></span>
+              <span class="rb-t">{current.data.progress}% through</span>
+            </>
+          )}
+          {current.data.sample && <><br /><SampleNote /></>}
+        </div>
+      </a>
+    ) : (
+      <div data-reveal>
+        <p class="kicker">Currently reading</p>
+        <p class="muted">{reading.length ? <>Nothing on the nightstand. <a href={url('/reading/')}>See the shelf</a>.</> : 'The shelf is still empty. First entry coming soon.'}</p>
+      </div>
+    )}
+
+    <section data-reveal aria-labelledby="latest-h">
+      <h2 id="latest-h">Latest pages</h2>
+      <ul class="latest-list">
+        {latestPost && (
+          <li><span class="ll-k">Blog · {formatDay(latestPost.data.date)}</span><a href={url(`/blog/${latestPost.id}/`)}>{latestPost.data.title}</a></li>
+        )}
+        {latestTil && (
+          <li><span class="ll-k">TIL · {formatDay(latestTil.data.date)}</span><a href={url(`/til/${latestTil.id}/`)}>{latestTil.data.title}</a></li>
+        )}
+        {!latestPost && !latestTil && (
+          <li><span class="ll-k">Blog &amp; TIL</span><span class="muted">No pages written yet. The first essay is being drafted.</span></li>
+        )}
+        <li><span class="ll-k">Year in review</span><a href={url(`/year/${year}/`)}>{year}, as a printed report</a></li>
+      </ul>
+      {socials.length > 0 && (
+        <ul class="elsewhere" aria-label="Elsewhere">
+          {socials.map((s) => <li><a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}<span class="sr-only"> (opens in new tab)</span></a></li>)}
+        </ul>
+      )}
+    </section>
+  </div>
+  <script type="application/json" id="home-log" set:html={logJson} />
+</Base>
+
+<script>
+  import { onPage } from '../scripts/lifecycle';
+  import { computeStats, prettyDay, todayIn, type LogItem } from '../lib/tracker';
+
+  // The build may be days old: recompute "today" and the streak in IST at view time.
+  onPage('home', (root) => {
+    const log = JSON.parse(document.getElementById('home-log')?.textContent ?? '[]') as LogItem[];
+    const today = todayIn(root.dataset.tz!);
+    const s = computeStats(log, today);
+    const $ = (id: string) => document.getElementById(id);
+    const d = $('today-date');
+    if (d) d.textContent = prettyDay(today);
+    const line = $('today-line');
+    if (line)
+      line.textContent = !log.length
+        ? 'The logbook is still blank. First entry coming soon.'
+        : s.loggedToday
+        ? 'Logged today. The streak is safe.'
+        : s.currentStreak > 0
+          ? `Nothing logged yet today; the streak is ${s.currentStreak} days.`
+          : 'Nothing logged yet today.';
+    const n = $('streak-n');
+    if (n) {
+      n.textContent = String(s.currentStreak);
+      if (n.nextElementSibling) n.nextElementSibling.textContent = s.currentStreak === 1 ? 'day' : 'days';
+    }
+    const l = $('streak-long');
+    if (l) l.textContent = String(s.longestStreak);
+  });
+</script>

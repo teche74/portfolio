@@ -1,0 +1,79 @@
+---
+/**
+ * One logbook page per entry, on ruled paper, with the date in the margin and the day as a
+ * two-column spread: "At work" on the left, "Self-improvement" on the right.
+ */
+import Base from '../../layouts/Base.astro';
+import { getDailyEntries, formatDay, slugTag, partsOf, type DailyEntry } from '../../lib/daily';
+import { splitHoursText, TRACKS, TRACK_LABEL } from '../../lib/daily-parts';
+import { moodHtml, tallyHtml } from '../../lib/motifs';
+import { url } from '../../lib/url';
+
+export async function getStaticPaths() {
+  const entries = await getDailyEntries(); // newest first; an empty log builds no pages
+  return entries.map((entry, i) => ({
+    params: { id: entry.id },
+    props: { entry, newer: entries[i - 1], older: entries[i + 1] },
+  }));
+}
+
+interface Props {
+  entry: DailyEntry;
+  newer?: DailyEntry;
+  older?: DailyEntry;
+}
+const { entry, newer, older } = Astro.props;
+const d = entry.data;
+const p = partsOf(entry);
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const [y, m, dd] = d.date.split('-');
+const split = splitHoursText(p.work?.hours, p.self?.hours);
+---
+<Base title={`${d.title} (${d.date})`} description={`Practice log for ${formatDay(d.date)}: ${d.title}`} active="practice" paper="ruled">
+  <p class="kicker" style="margin-left:0"><a href={url('/practice/')}>← the logbook</a></p>
+  <article class="log-page" aria-labelledby="entry-title">
+    <header class="log-head">
+      <time class="log-date" datetime={d.date}>
+        <span aria-hidden="true">{Number(dd)} {MON[Number(m) - 1]}</span>
+        <small aria-hidden="true">{y}</small>
+        <span class="sr-only">{formatDay(d.date)}</span>
+      </time>
+      <h1 id="entry-title">{d.title}</h1>
+      <p class="log-meta">
+        <span class="muted small mono">{formatDay(d.date)}{split && ` · ${split}`}</span>
+        <Fragment set:html={moodHtml(d.mood)} />
+      </p>
+    </header>
+    {p.intro && <div class="prose ruled-prose" set:html={p.intro} />}
+    <div class="log-spread log-spread-page">
+      {TRACKS.map((t) => {
+        const part = p[t];
+        return (
+          <section class={`log-side side-${t}`} aria-labelledby={`side-${t}`}>
+            <h2 class="side-k" id={`side-${t}`}>{TRACK_LABEL[t]}</h2>
+            {part ? (
+              <>
+                {(!!part.hours || part.tags.length > 0 || part.topics.length > 0) && (
+                  <p class="log-meta">
+                    <Fragment set:html={tallyHtml(part.hours)} />
+                    <span class="hl-tags" role="list">
+                      {part.tags.map((x) => <a role="listitem" class="hl-tag" href={url(`/practice/?tag=${slugTag(x)}&track=${t}`)}>#{x}</a>)}
+                      {part.topics.filter((x) => !part.tags.includes(x)).map((x) => <span role="listitem" class="hl-tag" style="--hl:var(--hl-green)">{x}</span>)}
+                    </span>
+                  </p>
+                )}
+                {part.html ? <div class="prose ruled-prose" set:html={part.html} /> : <p class="side-none">— no notes —</p>}
+              </>
+            ) : (
+              <p class="side-none">— nothing logged —</p>
+            )}
+          </section>
+        );
+      })}
+    </div>
+    <nav class="log-nav" aria-label="More entries">
+      {older ? <a class="btn" href={url(`/practice/${older.id}/`)} rel="prev">← {older.data.date}</a> : <span></span>}
+      {newer ? <a class="btn" href={url(`/practice/${newer.id}/`)} rel="next">{newer.data.date} →</a> : <span></span>}
+    </nav>
+  </article>
+</Base>

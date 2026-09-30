@@ -1,0 +1,48 @@
+---
+/** Page 92: the resume, clipped to a clipboard. Phones get a download card instead of an inline PDF. */
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import PageHead from '../components/PageHead.astro';
+import { SITE, isSet } from '../config';
+import { url } from '../lib/url';
+
+// SITE.resume = "" hides the resume links site-wide; this page then just says so.
+const pdf = isSet(SITE.resume) && SITE.resume ? url(SITE.resume) : '';
+const fileName = pdf ? pdf.split('/').pop() : '';
+---
+<Base title="Resume" description={`Resume of ${SITE.name}, ${SITE.title}.`} active="resume" paper="plain">
+  <PageHead no={92} kicker="Resume · clipped in" title="Resume" lede={`${SITE.name}, ${SITE.role}. One page, as a PDF.`}>
+    {pdf && (
+      <div class="btn-row">
+        <a class="btn primary" href={pdf} download={fileName}><Icon name="download" /> Download PDF</a>
+        <a class="btn" href={pdf} target="_blank" rel="noopener noreferrer"><Icon name="external" /> Open in a new tab<span class="sr-only"> (opens in new tab)</span></a>
+      </div>
+    )}
+  </PageHead>
+
+  {pdf ? (
+    <>
+      <div class="resume-mobile index-card">
+        <p class="ic-type">PDF · 1 page</p>
+        <h2 style="font-size:1.2rem">{SITE.name}: resume</h2>
+        <p>Phones rarely show PDFs inline well, so download it or open it in your PDF viewer.</p>
+        <div class="btn-row" style="margin-top:.8rem">
+          <a class="btn primary" href={pdf} download={fileName}><Icon name="download" /> Download</a>
+          <a class="btn" href={pdf} target="_blank" rel="noopener noreferrer"><Icon name="external" /> Open</a>
+        </div>
+      </div>
+      <div class="clipboard">
+        <div class="resume-frame">
+          <object data={`${pdf}#view=FitH`} type="application/pdf" aria-label={`${SITE.name} resume (PDF)`}>
+            <div class="resume-fallback">
+              <p>This browser can't show the PDF inline.</p>
+              <p><a class="btn primary" href={pdf} download={fileName}><Icon name="download" /> Download the resume</a></p>
+            </div>
+          </object>
+        </div>
+      </div>
+    </>
+  ) : (
+    <p class="panel-note">No resume is published right now.</p>
+  )}
+</Base>

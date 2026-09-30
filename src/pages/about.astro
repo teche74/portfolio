@@ -1,0 +1,128 @@
+---
+/**
+ * Page 3: the passport. Typewritten data page with a stapled photo, a drawn signature and a
+ * machine-readable zone; then the bio as a letter, and the skills as visa stamps dated by the
+ * year each first appears on the Journey trail.
+ */
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import PageHead from '../components/PageHead.astro';
+import { AVATAR_URL, BIO, GITHUB_USERNAME, LINKS, SITE, SKILLS, SOCIALS, isSet } from '../config';
+import { getTimeline } from '../lib/timeline-data';
+import { computeSkills, skillsHtml } from '../lib/timeline';
+import { url } from '../lib/url';
+
+const [given, ...rest] = SITE.name.split(/\s+/);
+const surname = rest.join(' ') || given;
+const initials = SITE.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const dob = isSet(SITE.dob) ? SITE.dob : '';
+const dobText = dob ? `${dob.slice(8, 10)} ${MONTHS[Number(dob.slice(5, 7)) - 1]} ${dob.slice(0, 4)}` : '';
+const [city, country] = SITE.location.split(/,\s*/);
+const hasEmail = isSet(SITE.email);
+const hasPhone = isSet(SITE.phone);
+const hasResume = isSet(SITE.resume) && !!SITE.resume;
+const gh = isSet(GITHUB_USERNAME) ? GITHUB_USERNAME : '';
+
+// Machine-readable zone: two 44-character lines, decorative (it is aria-hidden).
+const mrzName = (s: string) => s.toUpperCase().replace(/[^A-Z]+/g, '<');
+const pad = (s: string, n = 44) => (s + '<'.repeat(n)).slice(0, n);
+const yymmdd = dob ? dob.slice(2).replace(/-/g, '') : '<<<<<<';
+const mrz1 = pad(`P<IND${mrzName(surname)}<<${mrzName(given)}`);
+const mrz2 = pad(`FN2026QA0<7IND${yymmdd}1M<<<<QA<AUTOMATION<<<<`, 42) + '06';
+
+const skills = computeSkills(getTimeline());
+const socials = SOCIALS.filter((s) => isSet(s.href) && s.icon !== 'mail');
+const links = LINKS.filter((l) => isSet(l.href));
+---
+<Base title="About" description={`About ${SITE.name}: ${SITE.title}, ${SITE.location}. Contact, bio and skills.`} active="about" paper="dots">
+  <PageHead no={3} kicker="About · identity page" title="Passport" lede="The facts, the contact details, and a letter about the rest." />
+
+  <article class="passport" aria-labelledby="pp-name" data-reveal>
+    <div class="pp-band">
+      <strong>Field Notebook</strong><span>Republic of Practice · Passport</span><span>No. FN-2026-QA</span>
+    </div>
+    <div class="pp-grid">
+      <figure class={`pp-photo${gh ? '' : ' no-photo'}`}>
+        <span class="staple s1" aria-hidden="true"></span><span class="staple s2" aria-hidden="true"></span>
+        {gh && <img src={AVATAR_URL} alt={`Photo of ${SITE.name}`} width="176" height="215" decoding="async" onerror="this.parentElement.classList.add('no-photo');this.remove()" />}
+        <span class="pp-fallback" aria-hidden="true">{initials}</span>
+        <figcaption>holder's photograph</figcaption>
+      </figure>
+
+      <dl class="pp-fields">
+        <div class="pp-f"><dt>Surname <i>/ Nom</i></dt><dd id="pp-name">{surname}</dd></div>
+        <div class="pp-f"><dt>Given names <i>/ Prénoms</i></dt><dd>{given}</dd></div>
+        <div class="pp-f wide"><dt>Occupation</dt><dd>{SITE.role}</dd></div>
+        <div class="pp-f wide"><dt>Employer</dt><dd>{SITE.employer}</dd></div>
+        <div class="pp-f"><dt>Place of residence</dt><dd>{city}</dd></div>
+        <div class="pp-f"><dt>Country</dt><dd>{country ?? 'India'}</dd></div>
+        {dobText && <div class="pp-f"><dt>Date of birth</dt><dd><time datetime={dob}>{dobText}</time></dd></div>}
+        <div class="pp-f"><dt>Nationality</dt><dd>{SITE.nationality}</dd></div>
+        {hasPhone && (
+          <div class="pp-f wide" data-contact-row>
+            <dt>Telephone</dt>
+            <dd>
+              <a href="#main" data-tel><span data-contact-text>[shown with JavaScript on]</span></a>
+              <button type="button" class="btn small ghost" data-copy-phone><Icon name="copy" /> Copy</button>
+            </dd>
+          </div>
+        )}
+        {hasEmail && (
+          <div class="pp-f wide" data-contact-row>
+            <dt>Email</dt>
+            <dd class="lc">
+              <a href="#main" data-mailto><span data-contact-text>[shown with JavaScript on]</span></a>
+              <button type="button" class="btn small ghost" data-copy-email><Icon name="copy" /> Copy</button>
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      <div class="pp-sign">
+        <figure>
+          <svg class="signature" viewBox="0 0 240 70" data-draw role="img" aria-label={`Signature of ${SITE.name}`}>
+            <path class="ink" pathLength="1" d="M8 48c8-22 14-34 18-34 5 0-4 30-2 34 3 5 12-26 16-26 3 0-2 22 1 24 4 2 8-12 12-13 3 0 1 9 4 9 5 0 10-18 14-18" />
+            <path class="ink" pathLength="1" d="M96 40c4-18 10-30 12-30 3 0-6 34-4 38 2 3 8-14 14-14 5 0 3 12 8 12 4 0 6-8 9-8 2 0 1 6 4 6 4 0 6-10 10-10 3 0 0 10 4 10 5 0 9-20 14-30 1 10-4 28 0 30 4 1 10-12 12-12 3 0 1 8 5 8 6 0 18-6 34-12" />
+            <path class="ink" pathLength="1" d="M60 58c40-6 100-8 160-10" />
+          </svg>
+          <figcaption>Holder's signature</figcaption>
+        </figure>
+        <span class="stamp blue" style="--rot:-11deg"><span>Verified</span><strong>QA</strong><span>{SITE.location.split(',')[0]}</span></span>
+      </div>
+    </div>
+    <p class="mrz" aria-hidden="true">{mrz1}{'\n'}{mrz2}</p>
+  </article>
+
+  <section class="letter" aria-labelledby="letter-h" data-reveal>
+    <span class="tape top-l" aria-hidden="true"></span>
+    <div class="letter-head"><span>{SITE.location}</span><span>on company time, off company time</span></div>
+    <h2 id="letter-h" class="sr-only">A letter about me</h2>
+    <p>Dear reader,</p>
+    {BIO.map((p) => <p>{p}</p>)}
+    <p>If any of it is useful to you, write to me; the address is on the passport above.</p>
+    <p class="letter-sign">Yours, <span class="hand">{given}</span></p>
+  </section>
+
+  <section aria-labelledby="visas-h">
+    <div class="section-title">
+      <h2 id="visas-h">Visas &amp; entry stamps</h2>
+      <span class="aside">each stamp dated by the year it first appears on the <a href={url('/journey/')}>trail map</a></span>
+    </div>
+    <div class="visa-book" set:html={skillsHtml(skills, SKILLS)} />
+  </section>
+
+  <section aria-labelledby="links-h">
+    <div class="section-title"><h2 id="links-h">Luggage tags</h2></div>
+    <ul class="link-tags">
+      {hasResume && <li><a href={url('/resume/')}><Icon name="file" /> Resume (PDF)</a></li>}
+      {socials.map((s) => (
+        <li><a href={s.href} target="_blank" rel="noopener noreferrer"><Icon name={s.icon} /> {s.label}<span class="sr-only"> (opens in new tab)</span></a></li>
+      ))}
+      {links.map((l) => (
+        <li><a href={l.href} target="_blank" rel="noopener noreferrer"><Icon name={l.icon} /> {l.label}<span class="sr-only"> (opens in new tab)</span></a></li>
+      ))}
+      <li><a href={url('/stats/')}><Icon name="chart" /> Coding profiles</a></li>
+    </ul>
+  </section>
+</Base>
