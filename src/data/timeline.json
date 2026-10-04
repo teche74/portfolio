@@ -6,6 +6,8 @@
     "org": "GlobalLogic (Hitachi Group) · Noida",
     "start": "2026-01",
     "end": "present",
+    "link": "https://www.globallogic.com/",
+    "credential" : "https://mms.businesswire.com/media/20230113005483/en/1256040/5/GlobalLogic_BLK.jpg?download=1"
     "description": "Manual and automated QA for a public-safety records-management platform: defect investigation, test design, PR and fix verification, and regression in Azure DevOps, plus TestComplete desktop automation with BDD.",
     "tags": ["Manual testing", "Regression testing", "Test case design", "Azure DevOps", "TestComplete", "BDD"]
   },
