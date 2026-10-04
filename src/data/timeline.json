@@ -10,11 +10,21 @@
     "tags": ["Manual testing", "Regression testing", "Test case design", "Azure DevOps", "TestComplete", "BDD"]
   },
   {
+    "id": "globallogic-vanguard-award",
+    "type": "award",
+    "title": "Received Vanguard Award  [Health Care and Life Sciences Rise and Shine Rewards Program]",
+    "org": "GlobalLogic (Hitachi Group) · Noida",
+    "start": "2026-09-30",
+    "end": "present",
+    "description": "Outstanding Quality and Precision",
+    "tags": ["Manual testing", "Regression testing", "Test case design", "Azure DevOps", "TestComplete", "BDD"]
+  },
+  {
     "id": "award-leetcode-knight",
     "type": "award",
     "title": "LeetCode Knight badge (Top 3.6%)",
     "org": "LeetCode",
-    "start": "2026-05-06",
+    "start": "2024-10-08",
     "description": "Reached the Knight contest tier, which puts me in the top 3.6% of contest participants worldwide.",
     "link": "https://leetcode.com/u/ujjwalbisht55/",
     "tags": ["Competitive programming"]
