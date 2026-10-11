@@ -1,13 +1,21 @@
 ---
 date: "2026-10-11"
-title: "Prespective that a Tester must follow while Testing"
-tags: ["Errors","Failure","Bug","Fault","Defect"]
+title: "When to careful while Testing ?"
+tags: ["performance-detoriation"]
 ---
 
->Always keep in mind that i have to follow 3 prespective when testing.
+> Make sure that never ever perform testing or be careful (cross check / reverify with someone senior) when I have :
 
-1 > Think of as an end user (it might be a child, adult or an old) and find possible paths they can take if they don't know how things work. This will help me finding `Errors`.
+- Lack of domain knowledge, experience.
+- Tired.
+- Time Pressure.
+- Careless Mood.
+- Misunderstood the requirments.
+- Dealing with puzzled technical/buisnuiss problem.
+- Bigger codebase.
+- Multiple system interactions.
 
-2 > Think of as a devloper to find the edge cases where system get halt, not behave as expected. This will help me finding `Bug` \ `Fault` or `Defect`.   
 
-3 > Think of an end user again but this time you have to see whether the expected requirments must be met. This will help me prevent `Failure`.
+**Why Careful ?** 
+
+> Science says our brains can only deal with a reasonable amount of complexity or change, when asked to deal with more our brains may not process the information we have correctly.
