@@ -7,7 +7,7 @@ started: "2026-10-10"
 rating: 4
 pages: 8
 progress: 3
-tags: ["Tool Interface","Agent 4 step loop"]
+tags: 
 ---
 
 
